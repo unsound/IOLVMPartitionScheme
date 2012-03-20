@@ -7,12 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0366E3C015184C7000CB7C2A /* fmtmacros.h in Headers */ = {isa = PBXBuildFile; fileRef = 0366E3BF15184C7000CB7C2A /* fmtmacros.h */; };
+		03AED63A1517A2F500858A3A /* layout.h in Headers */ = {isa = PBXBuildFile; fileRef = 03AED6391517A2F500858A3A /* layout.h */; };
 		32D94FC60562CBF700B6AF17 /* IOLVMPartitionScheme.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A224C3EFF42367911CA2CB7 /* IOLVMPartitionScheme.h */; };
 		32D94FC80562CBF700B6AF17 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C167DFE841241C02AAC07 /* InfoPlist.strings */; };
 		32D94FCA0562CBF700B6AF17 /* IOLVMPartitionScheme.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1A224C3FFF42367911CA2CB7 /* IOLVMPartitionScheme.cpp */; settings = {ATTRIBUTES = (); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0366E3BF15184C7000CB7C2A /* fmtmacros.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fmtmacros.h; sourceTree = "<group>"; };
+		03AED6391517A2F500858A3A /* layout.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = layout.h; path = include/layout.h; sourceTree = "<group>"; };
 		089C167EFE841241C02AAC07 /* English */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; lineEnding = 0; name = English; path = English.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		1A224C3EFF42367911CA2CB7 /* IOLVMPartitionScheme.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = IOLVMPartitionScheme.h; sourceTree = "<group>"; };
 		1A224C3FFF42367911CA2CB7 /* IOLVMPartitionScheme.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = IOLVMPartitionScheme.cpp; sourceTree = "<group>"; };
@@ -32,10 +36,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		03AED6381517A2CF00858A3A /* libtlvm */ = {
+			isa = PBXGroup;
+			children = (
+				03AED6391517A2F500858A3A /* layout.h */,
+			);
+			name = libtlvm;
+			sourceTree = "<group>";
+		};
 		089C166AFE841209C02AAC07 /* IOLVMPartitionScheme */ = {
 			isa = PBXGroup;
 			children = (
 				247142CAFF3F8F9811CA285C /* Source */,
+				03AED6381517A2CF00858A3A /* libtlvm */,
 				8DA8362C06AD9B9200E5AC22 /* Kernel.framework */,
 				089C167CFE841241C02AAC07 /* Resources */,
 				19C28FB6FE9D52B211CA2CBB /* Products */,
@@ -65,6 +78,7 @@
 			children = (
 				1A224C3EFF42367911CA2CB7 /* IOLVMPartitionScheme.h */,
 				1A224C3FFF42367911CA2CB7 /* IOLVMPartitionScheme.cpp */,
+				0366E3BF15184C7000CB7C2A /* fmtmacros.h */,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -77,6 +91,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				32D94FC60562CBF700B6AF17 /* IOLVMPartitionScheme.h in Headers */,
+				03AED63A1517A2F500858A3A /* layout.h in Headers */,
+				0366E3C015184C7000CB7C2A /* fmtmacros.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,6 +225,7 @@
 				);
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = DEBUG;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				ONLY_ACTIVE_ARCH = NO;

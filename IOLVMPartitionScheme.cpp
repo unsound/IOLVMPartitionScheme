@@ -20,10 +20,12 @@
 #include <IOKit/IOBufferMemoryDescriptor.h>
 #include <IOKit/IOLib.h>
 #include <libkern/OSByteOrder.h>
+#include <machine/limits.h>
 
 #include "IOLVMPartitionScheme.h"
+#include "fmtmacros.h"
 
-#define DEBUG 1
+//#define DEBUG
 
 /* Logging macros. */
 #define LOG_CLASSNAME "IOLVMPartitionScheme"
@@ -34,7 +36,7 @@
 		IOLog("\n"); \
 	} while(0)
 
-#if DEBUG
+#if defined(DEBUG)
 #define LogDebug(...) \
 	do { \
 		IOLog(__VA_ARGS__); \
@@ -42,20 +44,9 @@
 	} while(0)
 #else
 #define LogDebug(....) do {} while(0)
-#endif
+#endif /* defined(DEBUG) */
 
-/* Declarations from lvm tools. */
-#define LVM_LOGICAL_SECTOR_SIZE 512U
-#define LVM_LABEL_SCAN_SECTORS  4U
-#define LVM_INITIAL_CRC         0xf597a6cfUL
-
-struct label_header {
-	int8_t id[8];		/* LABELONE */
-	uint64_t sector_xl;	/* Sector number of this label */
-	uint32_t crc_xl;	/* From next field to end of sector */
-	uint32_t offset_xl;	/* Offset from start of struct to contents */
-	int8_t type[8];		/* LVM2 001 */
-} __attribute__ ((packed));
+static const struct raw_locn null_raw_locn = { 0, 0, 0, 0 };
 
 #define super IOPartitionScheme
 OSDefineMetaClassAndStructors(IOLVMPartitionScheme, IOPartitionScheme);
@@ -240,12 +231,410 @@ static uint32_t calc_crc(uint32_t initial, const void *buf, uint32_t size)
 }
 #endif /* !defined(NO_LGPL_CODE) */
 
+struct parsed_lvm2_text {
+};
+
+
+static const char tokens[] = {
+	'{', '}', '[', ']', '=', '#', ','
+};
+
+static const char whitespace[] = {
+	' ', '\t', '\n', '\r'
+};
+
+static bool containsChar(const char *set, size_t setSize, char theChar)
+{
+	size_t i;
+
+	for(i = 0; i < setSize; ++i) {
+		if(set[i] == theChar)
+			return true;
+	}
+
+	return false;
+}
+
+static size_t nextToken(const char *const text, const size_t textLen,
+		const char **const outToken, size_t *const outTokenLen)
+{
+	bool quotedString = false;
+	size_t i;
+	size_t tokenStart = 0;
+	size_t tokenLen = 0;
+
+	LogDebug("nextToken iterating over %" FMTzu " characters...",
+		ARGzu(textLen));
+	for(i = 0; i < textLen; ++i) {
+		char curChar = text[i];
+
+		//LogDebug("%" FMTzu ":'%c'", ARGzu(i), curChar);
+
+		if(!quotedString && containsChar(whitespace,
+			sizeof(whitespace) / sizeof(char), curChar))
+		{
+			if(tokenLen) {
+				/* End of token. */
+				break;
+			}
+			else {
+				/* Whitespace before start of token. */
+				continue;
+			}
+		}
+		else if(!quotedString && containsChar(tokens,
+			sizeof(tokens) / sizeof(char), curChar))
+		{
+			if(tokenLen) {
+				/* End of token. (Start of new reserved
+				 * token.) */
+				break;
+			}
+			else {
+				/* Reserved token. Return immediately. */
+				tokenStart = i;
+				tokenLen = 1;
+				++i;
+				break;
+			}
+		}
+		else if(curChar == '\"') {
+			if(quotedString) {
+				/* End of token. */
+
+				/* Consume the last '\"'. */
+				++i;
+
+				break;
+			}
+			else if(tokenLen) {
+				/* End of token. */
+				break;
+			}
+			else if(!quotedString) {
+				quotedString = true;
+				continue;
+			}
+		}
+
+		if(!tokenLen)
+			tokenStart = i;
+
+		++tokenLen;
+	}
+
+	if(outToken)
+		*outToken = tokenLen ? &text[tokenStart] : NULL;
+	if(outTokenLen)
+		*outTokenLen = tokenLen;
+
+	return i;
+}
+
+static bool parseArray(const char *text, size_t textLen, size_t *bytesProcessed)
+{
+	int res = true;
+	size_t i = 0;
+	size_t j = 0;
+
+	for(; i < textLen;) {
+		const char *token = NULL;
+		size_t tokenLen;
+
+		i += nextToken(&text[i], textLen - i,
+			&token, &tokenLen);
+		if(!token) {
+			LogError("End of text inside "
+				 "array.");
+			res = false;
+			break;
+		}
+
+		if(tokenLen == 1 &&
+			token[0] == ']')
+		{
+			/* End of array. */
+			break;
+		}
+		else if(!(j++ % 2)) {
+			/* Array element. */
+			LogDebug("Got array element "
+				"%" FMTzu ": \"%.*s\"",
+				ARGzu(j/2), (int) tokenLen,
+				token);
+		}
+		else if(tokenLen == 1 &&
+			token[0] == ',')
+		{
+			/* Another array element coming
+			 * up. */
+		}
+		else {
+			LogError("Unexpected token "
+				"inside array: '%.*s'",
+				(int) tokenLen, token);
+			res = false;
+			break;
+		}
+	}
+
+	*bytesProcessed = i;
+
+	return res;
+}
+
+static bool parseDictionary(const char *const text, const size_t textLen,
+		struct parsed_lvm2_text *const result, const bool isRoot,
+		UInt32 depth, size_t *const bytesProcessed)
+{
+	size_t i;
+	//bool withinArray = false;
+	//UInt32 level = 0;
+
+	LogDebug("%s: Entering with text=%p textLen=%" FMTzu " result=%p "
+		"isRoot=%d depth=%" FMTlu " bytesProcessed=%p.",
+		__FUNCTION__, text, ARGzu(textLen), result, isRoot,
+		ARGlu(depth), bytesProcessed);
+
+	if(depth > 4) {
+		LogError("Hit dictionary depth limit.");
+		return false;
+	}
+
+	for(i = 0; i < textLen;) {
+		const char *token = NULL;
+		size_t tokenLen = 0;
+		const char *identifierToken = NULL;
+		size_t identifierTokenLen = 0;
+
+		while(i < textLen) {
+			i += nextToken(&text[i], textLen - i, &token,
+				&tokenLen);
+			if(!token || i >= textLen) {
+				/* End of text. */
+				break;
+			}
+			else if(tokenLen == 1 && token[0] == '#') {
+				/* Ignore all text until next newline. */
+				for(; i < textLen; ++i) {
+					if(text[i] == '\r' || text[i] == '\n')
+						break;
+				}
+
+				continue;
+			}
+			else if(tokenLen == 1 && containsChar(tokens,
+				sizeof(tokens) / sizeof(char), token[0]))
+			{
+				LogError("Expected identifier. Got: '%c'",
+					token[0]);
+				return false;
+			}
+
+			break;
+		}
+
+		if(!token || i >= textLen) {
+			/* End of text. */
+			break;
+		}
+
+		identifierToken = token;
+		identifierTokenLen = tokenLen;
+
+		LogDebug("Got identifier: \"%.*s\" (len: %" FMTzu ")",
+			(int) identifierTokenLen, identifierToken,
+			ARGzu(identifierTokenLen));
+
+		i += nextToken(&text[i], textLen - i, &token, &tokenLen);
+		if(!token || i >= textLen) {
+			/* End of text. */
+			LogError("Unexpected end of text inside statement.");
+			return false;
+		}
+
+		if(tokenLen == 1 && token[0] == '{') {
+			size_t bytesProcessed;
+
+			LogDebug("[Depth: %" FMTlu "] \"%.*s\" = {",
+				ARGlu(depth), (int) identifierTokenLen,
+				identifierToken);
+
+			if(!parseDictionary(&text[i], textLen - i, result,
+				false, depth + 1, &bytesProcessed))
+			{
+				return false;
+			}
+
+			i += bytesProcessed;
+
+			LogDebug("[Depth: %" FMTlu "] }", ARGlu(depth));
+		}
+		else if(tokenLen == 1 && token[0] == '=') {
+			i += nextToken(&text[i], textLen - i,
+				&token, &tokenLen);
+			if(!token || i >= textLen) {
+				/* End of text. */
+				LogError("Unexpected end of text "
+					"inside statement.");
+				return false;
+			}
+			else if(tokenLen == 1 && token[0] == '[') {
+				/* We have an array value. */
+				size_t bytesProcessed;
+
+				LogDebug("[Depth: %" FMTlu "] \"%.*s\" = [",
+					ARGlu(depth), (int) identifierTokenLen,
+					identifierToken);
+
+				if(!parseArray(&text[i], textLen - i,
+					&bytesProcessed))
+				{
+					return false;
+				}
+
+				i += bytesProcessed;
+
+				LogDebug("[Depth: %" FMTlu "] ]", ARGlu(depth));
+			}
+			else if(tokenLen == 1 && containsChar(tokens,
+				sizeof(tokens) / sizeof(char), token[0]))
+			{
+				LogError("Expected value. Found: '%c'",
+					token[0]);
+			}
+			else {
+				/* We have a plain value. */
+				const char *valueToken = token;
+				size_t valueTokenLen = tokenLen;
+
+				LogDebug("[Depth: %" FMTlu "] \"%.*s\" = "
+					"\"%.*s\"",
+					ARGlu(depth), (int) identifierTokenLen,
+					identifierToken, (int) valueTokenLen,
+					valueToken);
+			}
+
+		}
+		else {
+			LogError("Expected '=' or '{' after identifier. Got: "
+				"\"%.*s\"",
+				(int) tokenLen, token);
+			return false;
+		}
+	}
+
+	if(bytesProcessed)
+		*bytesProcessed = i;
+
+	return true;
+}
+
+static bool parseLVM2Text(const char *const text, const size_t textLen,
+		struct parsed_lvm2_text *const result)
+{
+	return parseDictionary(text, textLen, result, true, 0, NULL);
+}
+
+static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
+		const UInt64 metadataOffset, const UInt64 metadataSize,
+		const raw_locn *const locn)
+{
+	const UInt64 mediaBlockSize = media->getPreferredBlockSize();
+
+	const UInt64 locnOffset = OSSwapLittleToHostInt64(locn->offset);
+	const UInt64 locnSize = OSSwapLittleToHostInt64(locn->size);
+	const UInt32 locnChecksum = OSSwapLittleToHostInt32(locn->checksum);
+	const UInt32 locnFiller = OSSwapLittleToHostInt32(locn->filler);
+
+	bool res = false;
+	IOReturn status = kIOReturnError;
+
+	IOBufferMemoryDescriptor *textBuffer = NULL;
+	vm_size_t textBufferInset;
+	vm_size_t textBufferSize;
+
+	UInt64 readOffset;
+
+	char *text;
+	vm_size_t textLen;
+
+	LogDebug("metadataOffset = %" FMTllu, ARGllu(metadataOffset));
+	LogDebug("metadataSize = %" FMTllu, ARGllu(metadataSize));
+
+	LogDebug("mediaBlockSize = %" FMTllu, ARGllu(mediaBlockSize));
+	LogDebug("locnOffset = %" FMTllu, ARGllu(locnOffset));
+	LogDebug("locnSize = %" FMTllu, ARGllu(locnSize));
+	LogDebug("locnChecksum = 0x%" FMTlX, ARGlX(locnChecksum));
+	LogDebug("locnFiller = 0x%" FMTlX, ARGlX(locnFiller));
+
+	if(locnOffset >= metadataSize) {
+		LogError("locn offset out of range for metadata area (offset: "
+			"%" FMTllu " max: %" FMTllu ").",
+			ARGllu(locnOffset), ARGllu(metadataSize));
+		goto errOut;
+	}
+	else if(locnSize > (metadataSize - locnOffset)) {
+		LogError("locn size out of range for metadata area (size: "
+			"%" FMTllu " max: %" FMTllu ").",
+			ARGllu(locnSize), ARGllu(metadataSize - locnOffset));
+		goto errOut;
+	}
+	else if(mediaBlockSize > SIZE_MAX) {
+		LogError("mediaBlockSize out of range (%" FMTllu ").",
+			ARGllu(mediaBlockSize));
+		goto errOut;
+	}
+
+	textBufferInset = locnOffset % mediaBlockSize;
+	LogDebug("textBufferInset = %" FMTzu, ARGzu(textBufferInset));
+
+	textBufferSize = IORound(textBufferInset + locnSize, mediaBlockSize);
+	LogDebug("textBufferSize = %" FMTzu, ARGzu(textBufferSize));
+
+	textBuffer = IOBufferMemoryDescriptor::withCapacity(
+		/* capacity      */ textBufferSize,
+		/* withDirection */ kIODirectionIn);
+	if(textBuffer == NULL) {
+		LogError("Error while allocating %" FMTzu " bytes of memory "
+			"for 'textBuffer'.", ARGzu(textBuffer));
+		goto errOut;
+	}
+
+	readOffset = metadataOffset + (locnOffset - textBufferInset);
+	LogDebug("readOffset = %" FMTllu, ARGllu(readOffset));
+
+	status = media->read(obj, readOffset, textBuffer);
+	if(status != kIOReturnSuccess) {
+		LogError("Error %d while reading LVM2 text.", status);
+		goto errOut;
+	}
+
+	text = &((char*) textBuffer->getBytesNoCopy())[textBufferInset];
+	textLen = locnSize;
+
+	//LogDebug("LVM2 text: %.*s", textLen, text);
+
+	struct parsed_lvm2_text parsedText;
+	parseLVM2Text(text, textLen, &parsedText);
+
+	res = true;
+cleanup:
+	if(textBuffer)
+		textBuffer->release();
+
+	return res;
+errOut:
+	goto cleanup;
+}
+
 OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 {
 	IOBufferMemoryDescriptor *buffer = NULL;
+	IOBufferMemoryDescriptor *secondaryBuffer = NULL;
 	UInt64 bufferReadAt = 0;
-	UInt32 bufferSize = 0;
-	UInt64 contentOffset = 0;
+	vm_size_t bufferSize = 0;
+	UInt32 secondaryBufferSize = 0;
 	IOMedia *media = getProvider();
 	UInt64 mediaBlockSize = media->getPreferredBlockSize();
 	bool mediaIsOpen = false;
@@ -265,25 +654,39 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 
 	/* Allocate a suitably sized buffer. */
 
-	bufferSize = IORound(LVM_LOGICAL_SECTOR_SIZE, mediaBlockSize);
+	bufferSize = IORound(LVM_SECTOR_SIZE, mediaBlockSize);
 	buffer = IOBufferMemoryDescriptor::withCapacity(
 		/* capacity      */ bufferSize,
 		/* withDirection */ kIODirectionIn);
 	if(buffer == NULL) {
-		LogError("\tError while allocating 'buffer' (%lu bytes).",
-			 (unsigned long) bufferSize);
+		LogError("Error while allocating 'buffer' (%" FMTzu " bytes).",
+			ARGzu(bufferSize));
 		goto scanErr;
 	}
 
-	LogDebug("\tAllocated 'buffer': %lu bytes",
-		(unsigned long) bufferSize);
+	LogDebug("\tAllocated 'buffer': %" FMTzu " bytes",
+		ARGzu(bufferSize));
+
+	secondaryBufferSize = IORound(LVM_MDA_HEADER_SIZE, mediaBlockSize);
+	secondaryBuffer = IOBufferMemoryDescriptor::withCapacity(
+		/* capacity      */ secondaryBufferSize,
+		/* withDirection */ kIODirectionIn);
+	if(secondaryBuffer == NULL) {
+		LogError("Error while allocating 'secondaryBuffer' "
+			"(%" FMTzu "bytes).",
+			ARGzu(secondaryBufferSize));
+		goto scanErr;
+	}
+
+	LogDebug("\tAllocated 'secondaryBuffer': %" FMTzu " bytes",
+		ARGzu(secondaryBufferSize));
 
 	/* Allocate a set to hold the set of media objects representing
 	 * partitions. */
 
 	partitions = OSSet::withCapacity(8);
 	if(partitions == NULL) {
-		LogError("\tError while allocating 'partitions'.");
+		LogError("Error while allocating 'partitions'.");
 		goto scanErr;
 	}
 
@@ -293,7 +696,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 
 	mediaIsOpen = open(this, 0, kIOStorageAccessReader);
 	if(mediaIsOpen == false) {
-		LogError("\tError while opening media.");
+		LogError("Error while opening media.");
 		goto scanErr;
 	}
 
@@ -305,15 +708,15 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		UInt32 labelCrc;
 		UInt32 calculatedCrc;
 
-		bufferReadAt = i * LVM_LOGICAL_SECTOR_SIZE;
+		bufferReadAt = i * LVM_SECTOR_SIZE;
 
-		LogDebug("Searching for LVM label at sector %lu...",
-			 (unsigned long) i);
+		LogDebug("Searching for LVM label at sector %" FMTlu "...",
+			ARGlu(i));
 
 		status = media->read(this, bufferReadAt, buffer);
 		if(status != kIOReturnSuccess) {
-			LogError("\tError while reading sector %lu.",
-				 (unsigned long) i);
+			LogError("Error while reading sector %" FMTlu ".",
+				ARGlu(i));
 			goto scanErr;
 		}
 
@@ -321,15 +724,13 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 
 		LogDebug("\tlabel_header = {");
 		LogDebug("\t\t.id = '%.*s'", 8, labelHeader->id);
-		LogDebug("\t\t.sector_xl = %llu",
-			(unsigned long long)
-			OSSwapLittleToHostInt64(labelHeader->sector_xl));
-		LogDebug("\t\t.crc_xl = 0x%08lX",
-			(unsigned long)
-			OSSwapLittleToHostInt32(labelHeader->crc_xl));
-		LogDebug("\t\t.offset_xl = %lu",
-			(unsigned long)
-			OSSwapLittleToHostInt32(labelHeader->offset_xl));
+		LogDebug("\t\t.sector_xl = %" FMTllu,
+			ARGllu(OSSwapLittleToHostInt64(
+			labelHeader->sector_xl)));
+		LogDebug("\t\t.crc_xl = 0x%08" FMTlX,
+			ARGlX(OSSwapLittleToHostInt32(labelHeader->crc_xl)));
+		LogDebug("\t\t.offset_xl = %" FMTlu,
+			ARGlu(OSSwapLittleToHostInt32(labelHeader->offset_xl)));
 		LogDebug("\t\t.type = '%.*s'", 8, labelHeader->type);
 		LogDebug("\t}");
 
@@ -341,42 +742,28 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		labelSector = OSSwapLittleToHostInt64(labelHeader->sector_xl);
 		if(labelSector != i) {
 			LogError("'sector_xl' does not match actual sector "
-				 "(%llu != %lu).",
-				 (unsigned long long) labelSector,
-				 (unsigned long) i);
+				"(%" FMTllu " != %" FMTlu ").",
+				ARGllu(labelSector), ARGlu(i));
 			continue;
 		}
 
-		/* TODO: Verfiy sector CRC. */
 		labelCrc = OSSwapLittleToHostInt32(labelHeader->crc_xl);
 		calculatedCrc = calc_crc(LVM_INITIAL_CRC,
-			&labelHeader->offset_xl, LVM_LOGICAL_SECTOR_SIZE -
+			&labelHeader->offset_xl, LVM_SECTOR_SIZE -
 			offsetof(label_header, offset_xl));
 		if(labelCrc != calculatedCrc) {
 			LogError("Stored and calculated CRC32 checksums don't "
-				"match (0x%08lX != 0x%08lX).",
-				(unsigned long) labelCrc,
-				(unsigned long) calculatedCrc);
+				"match (0x%08" FMTlX " != 0x%08" FMTlX ").",
+				ARGlX(labelCrc), ARGlX(calculatedCrc));
 			continue;
 		}
-
-#if 0 /* This check is not in the LVM tools, so maybe not valid. */
-		if(memcmp(labelHeader->type, "LVM2 001", 8)) {
-			LogError("'type' magic does not match.");
-			continue;
-		}
-#endif
 
 		if(firstLabel == -1) {
 			firstLabel = i;
-			contentOffset =
-				bufferReadAt +
-				OSSwapLittleToHostInt32(labelHeader->offset_xl);
-			/* ...? */
 		}
 		else {
-			LogError("Ignoring additional label at sector %lu",
-				(unsigned int) i);
+			LogError("Ignoring additional label at sector %" FMTlu,
+				ARGlu(i));
 		}
 	}
 
@@ -385,18 +772,343 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		goto scanErr;
 	}
 
-	/*
-	bufferReadAt = 512 * contentOffset;
+	{
+		void *sectorBytes;
+		const struct label_header *labelHeader;
+		const struct pv_header *pvHeader;
 
-	LogDebug("Reading first sector of content from byte offset: %llu",
-		 (unsigned long long) bufferReadAt);
+		UInt64 labelSector;
+		UInt32 labelCrc;
+		UInt32 calculatedCrc;
+		UInt32 contentOffset;
 
-	status = media->read(this, bufferReadAt, buffer);
-	if(status != kIOReturnSuccess) {
-		LogError("\tError while reading first sector of content.");
-		goto scanErr;
+		UInt64 deviceSize;
+
+		UInt32 disk_areas_idx;
+		size_t dataAreasLength;
+		size_t metadataAreasLength;
+
+		bufferReadAt = firstLabel * LVM_SECTOR_SIZE;
+
+		status = media->read(this, bufferReadAt, buffer);
+		if(status != kIOReturnSuccess) {
+			LogError("\tError while reading label sector "
+				"%" FMTlu ".",
+				ARGlu(i));
+			goto scanErr;
+		}
+
+		sectorBytes = buffer->getBytesNoCopy();
+		labelHeader = (struct label_header*) sectorBytes;
+
+		/* Re-verify label fields. If the first three don't verify we
+		 * have a very strange situation, indicated with the tag
+		 * 'Unexpected:' before the error messages. */
+		if(memcmp(labelHeader->id, "LABELONE", 8)) {
+			LogError("Unexpected: 'id' magic does not match.");
+			goto scanErr;
+		}
+
+		labelSector = OSSwapLittleToHostInt64(labelHeader->sector_xl);
+		if(labelSector != firstLabel) {
+			LogError("Unexpected: 'sector_xl' does not match "
+				 "actual sector (%" FMTllu " != %" FMTlu ").",
+				 ARGllu(labelSector), ARGlu(firstLabel));
+			goto scanErr;
+		}
+
+		labelCrc = OSSwapLittleToHostInt32(labelHeader->crc_xl);
+		calculatedCrc = calc_crc(LVM_INITIAL_CRC,
+			&labelHeader->offset_xl, LVM_SECTOR_SIZE -
+			offsetof(label_header, offset_xl));
+		if(labelCrc != calculatedCrc) {
+			LogError("Unexpected: Stored and calculated CRC32 "
+				 "checksums don't match (0x%08" FMTlX " "
+				 "!= 0x%08" FMTlX ").",
+				 ARGlx(labelCrc), ARGlX(calculatedCrc));
+			goto scanErr;
+		}
+
+		contentOffset = OSSwapLittleToHostInt32(labelHeader->offset_xl);
+		if(contentOffset < sizeof(struct label_header)) {
+			LogError("Content overlaps header (content offset: "
+				 "%" FMTlu ").", ARGlu(contentOffset));
+			goto scanErr;
+		}
+
+		if(memcmp(labelHeader->type, LVM_LVM2_LABEL, 8)) {
+			LogError("Unsupported label type: '%.*s'.",
+				8, labelHeader->type);
+			goto scanErr;
+		}
+
+		pvHeader = (struct pv_header*)
+			&((char*) sectorBytes)[contentOffset];
+
+		disk_areas_idx = 0;
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0) {
+			const uintptr_t ptrDiff = (uintptr_t)
+				&pvHeader->disk_areas_xl[disk_areas_idx] -
+				(uintptr_t) sectorBytes;
+
+			if(ptrDiff > bufferSize) {
+				LogError("Data areas overflow into the next "
+					"sector (index %" FMTzu ").",
+					ARGzu(disk_areas_idx));
+				goto scanErr;
+			}
+
+			++disk_areas_idx;
+		}
+		dataAreasLength = disk_areas_idx;
+		++disk_areas_idx;
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0) {
+			const uintptr_t ptrDiff = (uintptr_t)
+				&pvHeader->disk_areas_xl[disk_areas_idx] -
+				(uintptr_t) sectorBytes;
+
+			if(ptrDiff > bufferSize) {
+				LogError("Metadata areas overflow into the "
+					"next sector (index %" FMTzu ").",
+					ARGzu(disk_areas_idx));
+				goto scanErr;
+			}
+
+			++disk_areas_idx;
+		}
+		metadataAreasLength = disk_areas_idx - (dataAreasLength + 1);
+
+		if(dataAreasLength != metadataAreasLength) {
+			LogError("Size mismatch between PV data and metadata "
+				"areas (%" FMTzu " != %" FMTzu ").",
+				ARGzu(dataAreasLength),
+				ARGzu(metadataAreasLength));
+			goto scanErr;
+		}
+
+#if defined(DEBUG)
+		LogDebug("\tpvHeader = {");
+		LogDebug("\t\tpv_uuid = '%.*s'", LVM_ID_LEN, pvHeader->pv_uuid);
+		LogDebug("\t\tdevice_size_xl = %" FMTllu, ARGllu(
+			OSSwapLittleToHostInt64(pvHeader->device_size_xl)));
+		LogDebug("\t\tdisk_areas_xl = {");
+		LogDebug("\t\t\tdata_areas = {");
+		disk_areas_idx = 0;
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0 &&
+			disk_areas_idx < dataAreasLength)
+		{
+			LogDebug("\t\t\t\t{");
+			LogDebug("\t\t\t\t\toffset = %" FMTllu,
+				ARGllu(OSSwapLittleToHostInt64(pvHeader->
+				disk_areas_xl[disk_areas_idx].offset)));
+			LogDebug("\t\t\t\t\tsize = %" FMTllu,
+				ARGllu(OSSwapLittleToHostInt64(pvHeader->
+				disk_areas_xl[disk_areas_idx].size)));
+			LogDebug("\t\t\t\t}");
+
+			++disk_areas_idx;
+		}
+		LogDebug("\t\t\t}");
+		++disk_areas_idx;
+		LogDebug("\t\t\tmetadata_areas = {");
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0 &&
+			disk_areas_idx < (dataAreasLength + 1 +
+			metadataAreasLength))
+		{
+			LogDebug("\t\t\t\t{");
+			LogDebug("\t\t\t\t\toffset = %" FMTllu,
+				ARGllu(OSSwapLittleToHostInt64(pvHeader->
+				disk_areas_xl[disk_areas_idx].offset)));
+			LogDebug("\t\t\t\t\tsize = %" FMTllu,
+				ARGllu(OSSwapLittleToHostInt64(pvHeader->
+				disk_areas_xl[disk_areas_idx].size)));
+			LogDebug("\t\t\t\t}");
+
+			++disk_areas_idx;
+		}
+		LogDebug("\t\t\t}");
+		LogDebug("\t\t}");
+		LogDebug("\t}");
+#endif /* defined(DEBUG) */
+
+		deviceSize = OSSwapLittleToHostInt64(pvHeader->device_size_xl);
+		disk_areas_idx = 0;
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0) {
+			const disk_locn *locn;
+			const disk_locn *meta_locn;
+			UInt64 meta_offset;
+			UInt64 meta_size;
+
+			const struct mda_header *mdaHeader;
+			UInt32 mda_checksum;
+			UInt32 mda_version;
+			UInt64 mda_start;
+			UInt64 mda_size;
+
+			UInt32 mda_calculated_checksum;
+
+			if(disk_areas_idx >= dataAreasLength) {
+				LogError("Overflow when iterating through disk "
+					"areas (%" FMTzu " >= %" FMTzu ").",
+					ARGzu(disk_areas_idx),
+					ARGzu(dataAreasLength));
+				goto scanErr;
+			}
+
+			locn = &pvHeader->disk_areas_xl[disk_areas_idx];
+			meta_locn = &pvHeader->disk_areas_xl[dataAreasLength +
+				1 + disk_areas_idx];
+
+			meta_offset =
+				OSSwapLittleToHostInt64(meta_locn->offset);
+			meta_size =
+				OSSwapLittleToHostInt64(meta_locn->size);
+
+			status = media->read(this, meta_offset,
+				secondaryBuffer);
+			if(status != kIOReturnSuccess) {
+				LogError("Error while reading first metadata "
+					"sector of PV number %" FMTlu " "
+					"(offset %" FMTzu " bytes).",
+					ARGlu(disk_areas_idx),
+					ARGzu(meta_offset));
+				goto scanErr;
+			}
+
+			mdaHeader = (struct mda_header*)
+				secondaryBuffer->getBytesNoCopy();
+
+#if defined(DEBUG)
+			LogDebug("mdaHeader[%" FMTlu "] = {",
+				ARGlu(disk_areas_idx));
+			LogDebug("\tchecksum_xl = 0x%08" FMTlX,
+				ARGlX(OSSwapLittleToHostInt32(
+				mdaHeader->checksum_xl)));
+			LogDebug("\tmagic = '%.*s'", 16, mdaHeader->magic);
+			LogDebug("\tversion = %" FMTlu,
+				ARGlu(OSSwapLittleToHostInt32(
+				mdaHeader->version)));
+			LogDebug("\tstart = %" FMTllu,
+				ARGllu(OSSwapLittleToHostInt64(
+				mdaHeader->start)));
+			LogDebug("\tsize = %" FMTllu,
+				ARGllu(OSSwapLittleToHostInt64(
+				mdaHeader->size)));
+			LogDebug("\traw_locns = {");
+			{
+				size_t raw_locns_idx = 0;
+
+				while(memcmp(&null_raw_locn,
+					&mdaHeader->raw_locns[raw_locns_idx],
+					sizeof(struct raw_locn)) != 0)
+				{
+					const raw_locn *const cur_locn =
+						&mdaHeader->
+						raw_locns[raw_locns_idx];
+
+					LogDebug("\t\t[%" FMTllu "] = {",
+						ARGllu(raw_locns_idx));
+					LogDebug("\t\t\toffset = %" FMTllu,
+						ARGllu(OSSwapLittleToHostInt64(
+						cur_locn->offset)));
+					LogDebug("\t\t\tsize = %" FMTllu,
+						ARGllu(OSSwapLittleToHostInt64(
+						cur_locn->size)));
+					LogDebug("\t\t\tchecksum = 0x%08" FMTlX,
+						ARGlX(OSSwapLittleToHostInt32(
+						cur_locn->checksum)));
+					LogDebug("\t\t\tfiller = %" FMTlu,
+						ARGlu(OSSwapLittleToHostInt32(
+						cur_locn->filler)));
+					LogDebug("\t\t}");
+
+					++raw_locns_idx;
+				}
+			}
+			LogDebug("\t}");
+			LogDebug("}");
+#endif /* defined(DEBUG) */
+
+			mda_checksum =
+				OSSwapLittleToHostInt32(mdaHeader->checksum_xl);
+			mda_version =
+				OSSwapLittleToHostInt32(mdaHeader->version);
+			mda_start = OSSwapLittleToHostInt64(mdaHeader->start);
+			mda_size = OSSwapLittleToHostInt64(mdaHeader->size);
+
+			mda_calculated_checksum = calc_crc(LVM_INITIAL_CRC,
+				mdaHeader->magic, LVM_MDA_HEADER_SIZE -
+				offsetof(struct mda_header, magic));
+			if(mda_calculated_checksum != mda_checksum) {
+				LogError("mda_header checksum mismatch "
+					"(calculated: 0x%" FMTlX " expected: "
+					"0x%" FMTlX ").",
+					ARGlX(mda_calculated_checksum),
+					ARGlX(mda_checksum));
+				continue;
+			}
+
+			if(mda_version != 1) {
+				LogError("Unsupported mda_version: %" FMTlu,
+					ARGlu(mda_version));
+				continue;
+			}
+
+			if(mda_start != meta_offset) {
+				LogError("mda_start does not match metadata "
+					"offset (%" FMTllu " != %" FMTllu ").",
+					ARGllu(mda_start), ARGllu(meta_offset));
+				continue;
+			}
+
+			if(mda_size != meta_size) {
+				LogError("mda_size does not match metadata "
+					"size (%" FMTllu " != %" FMTllu ").",
+					ARGllu(mda_size), ARGllu(meta_size));
+				continue;
+			}
+
+			if(memcmp(&mdaHeader->raw_locns[0], &null_raw_locn,
+				sizeof(struct raw_locn)) == 0)
+			{
+				LogError("Missing first raw_locn.");
+				continue;
+			}
+			else if(memcmp(&mdaHeader->raw_locns[1], &null_raw_locn,
+				sizeof(struct raw_locn)) != 0)
+			{
+				LogError("Found more than one raw_locn "
+					"(currently unsupported).");
+				continue;
+			}
+
+			readLVM2Text(media, this, meta_offset, meta_size,
+				&mdaHeader->raw_locns[0]);
+
+#if 0
+			if(disk_areas_idx > INT_MAX) {
+				LogError("Index out of range: %" ARGlu,
+					FMTlu(disk_areas_idx));
+				break;
+			}
+
+			IOMedia *newMedia = instantiateMediaObject(
+				(int) disk_areas_idx,
+				deviceSize,
+				locn);
+			if(newMedia) {
+				partitions->setObject(newMedia);
+				newMedia->release();
+			}
+			else {
+				LogError("Error while creating IOMedia "
+					"object.");
+			}
+#endif
+
+			++disk_areas_idx;
+		}
 	}
-	*/
 
 	goto scanErr;
 
@@ -415,10 +1127,123 @@ scanErr:
 		close(this);
 	if(partitions)
 		partitions->release();
+	if(secondaryBuffer)
+		secondaryBuffer->release();
 	if(buffer)
 		buffer->release();
 
 	return 0;
+}
+
+IOMedia* IOLVMPartitionScheme::instantiateMediaObject(
+		const int partitionNumber,
+		const UInt64 formattedLVMSize,
+		const disk_locn *const partition)
+{
+	//
+	// Instantiate a new media object to represent the given partition.
+	//
+
+	IOMedia *media = getProvider();
+	UInt64 mediaBlockSize = media->getPreferredBlockSize();
+	UInt64 partitionBase = 0;
+	const char *partitionHint;
+	bool partitionIsWritable = media->isWritable();
+	const char *partitionName;
+	UInt64 partitionSize = 0;
+
+	partitionHint = "LVM_member";
+	partitionName = "";
+
+	// Compute the relative byte position and size of the new partition.
+
+	partitionBase = OSSwapLittleToHostInt64(partition->offset);
+	partitionSize = OSSwapLittleToHostInt64(partition->size);
+
+	if(partitionSize == 0) {
+		partitionSize = formattedLVMSize - partitionBase;
+	}
+
+	// Clip the size of the new partition if it extends past the
+	// end-of-media.
+
+	if(partitionBase + partitionSize > media->getSize()) {
+		partitionSize = media->getSize() - partitionBase;
+	}
+
+#if 0
+	// Determine whether the new partition is read-only.
+	//
+	// Note that we treat the misspelt Apple_patition_map entries as
+	// equivalent to Apple_partition_map entries due to the messed up CDs
+	// noted in 2513960.
+
+	if(!strncmp(partition->dpme_type, "Apple_partition_map",
+			sizeof(partition->dpme_type)) ||
+		!strncmp(partition->dpme_type, "Apple_Partition_Map",
+			sizeof(partition->dpme_type)) ||
+		!strncmp(partition->dpme_type, "Apple_patition_map",
+			sizeof(partition->dpme_type)) ||
+		(OSSwapBigToHostInt32(partition->dpme_flags) &
+		(DPME_FLAGS_WRITABLE | DPME_FLAGS_VALID)) == DPME_FLAGS_VALID)
+	{
+		partitionIsWritable = false;
+	}
+#endif
+
+	// Create the new media object.
+
+	IOMedia *newMedia = instantiateDesiredMediaObject();
+
+	if(newMedia) {
+		if(newMedia->init(
+			/* base               */ partitionBase,
+			/* size               */ partitionSize,
+			/* preferredBlockSize */ mediaBlockSize,
+			/* attributes         */ media->getAttributes(),
+			/* isWhole            */ false,
+			/* isWritable         */ partitionIsWritable,
+			/* contentHint        */ partitionHint))
+		{
+			// Set a name for this partition.
+
+			char name[24];
+			snprintf(name, sizeof(name), "Untitled %d",
+				(int) partitionNumber);
+			newMedia->setName(partitionName[0] ? partitionName :
+				name);
+
+			// Set a location value (the partition number) for this
+			// partition.
+
+			char location[12];
+			snprintf(location, sizeof(location), "%d",
+				(int) partitionNumber);
+			newMedia->setLocation(location);
+
+			// Set the "Partition ID" key for this partition.
+
+			newMedia->setProperty(kIOMediaPartitionIDKey,
+				(UInt32) partitionNumber, 32);
+		}
+		else {
+			newMedia->release();
+			newMedia = 0;
+		}
+	}
+
+	return newMedia;
+}
+
+IOMedia* IOLVMPartitionScheme::instantiateDesiredMediaObject(
+		/*UInt64 formattedLVMSize,
+		disk_locn *partition*/)
+{
+	//
+	// Allocate a new media object (called from instantiateMediaObject).
+	//
+
+	return new IOMedia;
 }
 
 #ifndef __LP64__

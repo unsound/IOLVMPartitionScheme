@@ -25,6 +25,8 @@
 
 #include <IOKit/IOTypes.h>
 
+#include "layout.h"
+
 #define kIOLVMPartitionSchemeClass "IOLVMPartitionScheme"
 
 #pragma pack(push, 1)                        /* (enable 8-bit struct packing) */
@@ -63,23 +65,23 @@ protected:
 
 	virtual OSSet* scan(SInt32 *score);
 
-#if 0
 	/*
 	 * Instantiate a new media object to represent the given partition.
 	 */
 
-	virtual IOMedia* instantiateMediaObject(dpme *partition,
-		UInt32 partitionID,
-		UInt32 partitionBlockSize);
+	virtual IOMedia* instantiateMediaObject(
+		int partitionNumber,
+		UInt64 formattedLVMSize,
+		const disk_locn *partition);
 
 	/*
 	 * Allocate a new media object (called from instantiateMediaObject).
 	 */
 
-	virtual IOMedia* instantiateDesiredMediaObject(dpme *partition,
-		UInt32 partitionID,
-		UInt32 partitionBlockSize);
-#endif
+	virtual IOMedia* instantiateDesiredMediaObject(
+		/*int partitionNumber,
+		UInt64 formattedLVMSize,
+		const disk_locn *partition*/);
 
 #ifndef __LP64__
 	/*
