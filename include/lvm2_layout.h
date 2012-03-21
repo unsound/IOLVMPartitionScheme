@@ -16,8 +16,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#if !defined(_TLVM_LAYOUT_H)
-#define _TLVM_LAYOUT_H
+#if !defined(_TLVM_LVM2_LAYOUT_H)
+#define _TLVM_LVM2_LAYOUT_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,4 +95,4 @@ struct mda_header {
 }
 #endif
 
-#endif /* !defined(_TLVM_LAYOUT_H) */
+#endif /* !defined(_TLVM_LVM2_LAYOUT_H) */

@@ -16,8 +16,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#if !defined(_IOLVMPARTITIONSCHEME_FMTMACROS_H)
-#define _IOLVMPARTITIONSCHEME_FMTMACROS_H
+#if !defined(_LVM2_OSAL_IOKIT_H)
+#define _LVM2_OSAL_IOKIT_H
+
+#include <IOKit/IOLib.h>
 
 #define FMThhd "d"
 #define FMThhu "u"
@@ -79,4 +81,29 @@
 #define ARGzx(value)    (unsigned long long) (value)
 #define ARGzX(value)    (unsigned long long) (value)
 
-#endif /* !defined(_IOLVMPARTITIONSCHEME_FMTMACROS_H) */
+/* Logging macros. */
+#if !defined(LOG_CLASSNAME)
+#define LOG_CLASSNAME ""
+#endif /* !defined(LOG_CLASSNAME) */
+
+#define LogError(...) \
+	do { \
+		if(LOG_CLASSNAME[0] == '\0') \
+			IOLog("[%s(...)] ", __FUNCTION__); \
+		else \
+			IOLog("[%s::%s(...)] ", LOG_CLASSNAME, __FUNCTION__); \
+		IOLog(__VA_ARGS__); \
+		IOLog("\n"); \
+	} while(0)
+
+#if defined(DEBUG)
+#define LogDebug(...) \
+	do { \
+		IOLog(__VA_ARGS__); \
+		IOLog("\n"); \
+	} while(0)
+#else
+#define LogDebug(....) do {} while(0)
+#endif /* defined(DEBUG) */
+
+#endif /* !defined(_LVM2_OSAL_IOKIT_H) */

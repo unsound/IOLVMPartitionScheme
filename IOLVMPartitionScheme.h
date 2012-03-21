@@ -25,7 +25,7 @@
 
 #include <IOKit/IOTypes.h>
 
-#include "layout.h"
+#include "lvm2_layout.h"
 
 #define kIOLVMPartitionSchemeClass "IOLVMPartitionScheme"
 
