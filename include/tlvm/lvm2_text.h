@@ -18,6 +18,10 @@
 
 #include "lvm2_types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct lvm2_bounded_string {
 	int length;
 	char content[0];
@@ -46,13 +50,13 @@ struct lvm2_dom_value {
 
 struct lvm2_dom_section {
 	struct lvm2_dom_obj obj_super;
-	struct lvm2_dom_obj *children;
+	struct lvm2_dom_obj **children;
 	size_t children_len;
 };
 
 struct lvm2_dom_array {
 	struct lvm2_dom_obj obj_super;
-	struct lvm2_dom_value *elements;
+	struct lvm2_dom_value **elements;
 	size_t elements_len;
 };
 
@@ -140,7 +144,7 @@ struct lvm2_volume_group {
 	struct lvm2_logical_volume *logical_volumes;
 };
 
-struct parsed_lvm2_text {
+struct lvm2_layout {
 	struct lvm2_volume_group *vg;
 	struct lvm2_bounded_string *contents;
 	int version;
@@ -163,11 +167,12 @@ struct parsed_lvm2_text_builder {
 
 u32 lvm2_calc_crc(u32 initial, const void *buf, u32 size);
 
-lvm2_bool lvm2_parse_text(const char *const text, const size_t textLen,
-	struct parsed_lvm2_text **const outResult);
+lvm2_bool lvm2_parse_text(const char *const text, const size_t text_len,
+		struct lvm2_dom_section **const out_result);
 
-void lvm2_bounded_string_destroy(struct lvm2_bounded_string **string);
+void lvm2_dom_section_destroy(struct lvm2_dom_section **section,
+		lvm2_bool recursive);
 
-void lvm2_volume_group_destroy(struct lvm2_volume_group **vg);
-
-void parsed_lvm2_text_destroy(struct parsed_lvm2_text **parsed_text);
+#ifdef __cplusplus
+}
+#endif

@@ -21,6 +21,8 @@
 #include <stdlib.h>
 #include <errno.h>
 
+static long long allocations = 0;
+
 int lvm2_malloc(size_t size, void **out_ptr)
 {
 	void *ptr;
@@ -28,6 +30,7 @@ int lvm2_malloc(size_t size, void **out_ptr)
 	ptr = malloc(size);
 	if(ptr) {
 		*out_ptr = ptr;
+		++allocations;
 		return 0;
 	}
 	else {
@@ -40,4 +43,11 @@ void lvm2_free(void **ptr,
 {
 	free(*ptr);
 	*ptr = NULL;
+	--allocations;
+}
+
+long long lvm2_get_allocations(void);
+
+long long lvm2_get_allocations(void) {
+	return allocations;
 }

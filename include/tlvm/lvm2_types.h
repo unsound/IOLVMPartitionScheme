@@ -51,9 +51,10 @@ typedef uint64_t u64;
 
 #endif /*(defined(__DARWIN__) || defined (__APPLE__)) && defined(KERNEL) */
 
-typedef enum {
+typedef int lvm2_bool;
+enum {
 	LVM2_FALSE = 0,
 	LVM2_TRUE = 1,
-} lvm2_bool;
+};
 
 #endif /* !defined(_LIBTLVM_LVM2_TYPES_H) */

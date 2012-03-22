@@ -76,7 +76,7 @@ static int lvm2_bounded_string_create(const char *const content,
 	return err;
 }
 
-LVM2_TEXT_EXPORT void lvm2_bounded_string_destroy(
+static void lvm2_bounded_string_destroy(
 		struct lvm2_bounded_string **string)
 {
 	lvm2_free((void**) string,
@@ -109,8 +109,205 @@ static void lvm2_dom_obj_deinitialize(struct lvm2_dom_obj *const obj)
 	memset(obj, 0, sizeof(struct lvm2_dom_obj));
 }
 
+static int lvm2_dom_value_create(const char *const value_name,
+		const int value_name_len, const char *const value_string,
+		const int value_string_len,
+		struct lvm2_dom_value **const out_value)
+{
+	int err;
+	struct lvm2_dom_value *value;
+
+	err = lvm2_malloc(sizeof(struct lvm2_dom_value), (void**) &value);
+	if(err) {
+		LogError("Error while allocating memory for struct "
+			"lvm2_dom_value: %d", err);
+	}
+	else if((uintptr_t) &value->obj_super != (uintptr_t) value) {
+		LogError("Incompatible compiler struct layout.");
+		err = EINVAL;
+	}
+	else {
+		memset(value, 0, sizeof(struct lvm2_dom_value));
+
+		err = lvm2_dom_obj_initialize(LVM2_DOM_TYPE_VALUE,
+			value_name, value_name_len, &value->obj_super);
+		if(err) {
+			LogError("Error while initializing super: %d", err);
+		}
+		else {
+			struct lvm2_bounded_string *value_bounded_string;
+
+			err = lvm2_bounded_string_create(value_string,
+				value_string_len, &value_bounded_string);
+			if(err) {
+				LogError("Error while creating bounded "
+					"value_string: %d", err);
+			}
+			else {
+				value->value = value_bounded_string;
+				*out_value = value;
+			}
+		}
+
+		if(err) {
+			lvm2_free((void**) &value,
+				sizeof(struct lvm2_dom_value));
+		}
+	}
+
+	return err;
+}
+
+static void lvm2_dom_value_destroy(struct lvm2_dom_value **const value)
+{
+	LogDebug("%s: Entering with value=%p.",
+		__FUNCTION__, value);
+	LogDebug("\t*value = %p", *value);
+
+	if((*value)->obj_super.type != LVM2_DOM_TYPE_VALUE) {
+		LogError("BUG: Wrong type (%d) of DOM object in %s.",
+			(*value)->obj_super.type, __FUNCTION__);
+		return;
+	}
+
+	lvm2_dom_obj_deinitialize(&(*value)->obj_super);
+
+	lvm2_bounded_string_destroy(&(*value)->value);
+
+	lvm2_free((void**) value, sizeof(struct lvm2_dom_value));
+}
+
+static int lvm2_dom_array_create(const char *const array_name,
+		const int array_name_len,
+		struct lvm2_dom_array **const out_array)
+{
+	int err;
+	struct lvm2_dom_array *array;
+
+	err = lvm2_malloc(sizeof(struct lvm2_dom_array), (void**) &array);
+	if(err) {
+		LogError("Error while allocating memory for struct "
+			"lvm2_dom_array: %d", err);
+	}
+	else if((uintptr_t) &array->obj_super != (uintptr_t) array) {
+		LogError("Incompatible compiler struct layout.");
+		err = EINVAL;
+	}
+	else {
+		memset(array, 0, sizeof(struct lvm2_dom_array));
+
+		err = lvm2_dom_obj_initialize(LVM2_DOM_TYPE_ARRAY,
+			array_name, array_name_len, &array->obj_super);
+		if(err) {
+			LogError("Error while initializing super: %d", err);
+		}
+		else {
+			array->elements = NULL;
+			array->elements_len = 0;
+
+			*out_array = array;
+		}
+	}
+
+	return err;
+}
+
+static int lvm2_dom_array_add_element(struct lvm2_dom_array *const array,
+		struct lvm2_dom_value *const element)
+{
+	int err;
+	struct lvm2_dom_value **old_elements;
+	struct lvm2_dom_value **new_elements;
+	size_t old_elements_len;
+	size_t new_elements_len;
+	size_t old_elements_size;
+	size_t new_elements_size;
+
+	LogDebug("%s: Entering with array=%p element=%p.",
+		__FUNCTION__, array, element);
+
+	if(!array) {
+		LogError("NULL 'array'.");
+		return EINVAL;
+	}
+	else if(array->obj_super.type != LVM2_DOM_TYPE_ARRAY) {
+		LogError("Non-array type passed to %s.", __FUNCTION__);
+		return EINVAL;
+	}
+
+	old_elements = array->elements;
+	old_elements_len = array->elements_len;
+	old_elements_size = old_elements_len * sizeof(struct lvm2_dom_obj*);
+
+	new_elements_len = old_elements_len + 1;
+	new_elements_size = new_elements_len * sizeof(struct lvm2_dom_obj*);
+	err = lvm2_malloc(new_elements_size, (void**) &new_elements);
+	if(err) {
+		LogError("Error while allocating memory for elements array "
+			"expansion: %d", err);
+	}
+	else {
+		if(old_elements)
+			memcpy(new_elements, old_elements, old_elements_size);
+		new_elements[new_elements_len - 1] = element;
+
+		array->elements = new_elements;
+		array->elements_len = new_elements_len;
+
+		LogDebug("Expanded array from %" FMTzu " (%p) to %" FMTzu " "
+			"(%p) elements.", ARGzu(old_elements_len), old_elements,
+			ARGzu(new_elements_len), new_elements);
+
+		if(old_elements) {
+			lvm2_free((void**) &old_elements, old_elements_size);
+		}
+	}
+
+	return err;
+}
+
+static void lvm2_dom_array_destroy(struct lvm2_dom_array **const array,
+		const lvm2_bool recursive)
+{
+	LogDebug("%s: Entering with array=%p recursive=%d.",
+		__FUNCTION__, array, recursive);
+	LogDebug("\t*array = %p", *array);
+
+	if((*array)->obj_super.type != LVM2_DOM_TYPE_ARRAY) {
+		LogError("BUG: Wrong type (%d) of DOM object in %s.",
+			(*array)->obj_super.type, __FUNCTION__);
+		return;
+	}
+
+	if(recursive) {
+		size_t i;
+
+		for(i = 0; i < (*array)->elements_len; ++i) {
+			LogDebug("\t(*array)->elements[%" FMTzu "] = %p",
+				ARGzu(i), (*array)->elements[i]);
+		}
+
+		for(i = 0; i < (*array)->elements_len; ++i) {
+			lvm2_dom_value_destroy(&(*array)->elements[i]);
+		}
+	}
+
+	lvm2_dom_obj_deinitialize(&(*array)->obj_super);
+
+	if((*array)->elements) {
+		lvm2_free((void**) &(*array)->elements,
+			((*array)->elements_len *
+			sizeof(struct lvm2_dom_value*)));
+	}
+
+	(*array)->elements_len = 0;
+
+	lvm2_free((void**) array, sizeof(struct lvm2_dom_array));
+}
+
 static int lvm2_dom_section_create(const char *const section_name,
-	const int section_name_len, struct lvm2_dom_section **const out_section)
+		const int section_name_len,
+		struct lvm2_dom_section **const out_section)
 {
 	int err;
 	struct lvm2_dom_section *section;
@@ -119,6 +316,10 @@ static int lvm2_dom_section_create(const char *const section_name,
 	if(err) {
 		LogError("Error while allocating memory for struct "
 			"lvm2_dom_section: %d", err);
+	}
+	else if((uintptr_t) &section->obj_super != (uintptr_t) section) {
+		LogError("Incompatible compiler struct layout.");
+		err = EINVAL;
 	}
 	else {
 		memset(section, 0, sizeof(struct lvm2_dom_section));
@@ -139,18 +340,167 @@ static int lvm2_dom_section_create(const char *const section_name,
 	return err;
 }
 
-static int lvm2_dom_section_add_child(struct lvm2_dom_section **const section,
-		struct lvm2_dom_obj **const child)
+static int lvm2_dom_section_add_child(struct lvm2_dom_section *const section,
+		struct lvm2_dom_obj *const child)
 {
-	
+	int err;
+	struct lvm2_dom_obj **old_children;
+	struct lvm2_dom_obj **new_children;
+	size_t old_children_len;
+	size_t new_children_len;
+	size_t old_children_size;
+	size_t new_children_size;
+
+	LogDebug("%s: Entering with section=%p child=%p.",
+		__FUNCTION__, section, child);
+
+	if(!section) {
+		LogError("NULL 'section_obj'.");
+		return EINVAL;
+	}
+	else if(section->obj_super.type != LVM2_DOM_TYPE_SECTION) {
+		LogError("Non-section type passed to %s.", __FUNCTION__);
+		return EINVAL;
+	}
+
+	old_children = section->children;
+	LogDebug("old_children=%p", old_children);
+	old_children_len = section->children_len;
+	LogDebug("old_children_len=%" FMTzu, ARGzu(old_children_len));
+	old_children_size = old_children_len * sizeof(struct lvm2_dom_obj*);
+	LogDebug("old_children_size=%" FMTzu, ARGzu(old_children_size));
+
+	new_children_len = old_children_len + 1;
+	LogDebug("new_children_len=%" FMTzu, ARGzu(new_children_len));
+	new_children_size = new_children_len * sizeof(struct lvm2_dom_obj*);
+	LogDebug("Allocating %" FMTzu " bytes...", ARGzu(new_children_size));
+	err = lvm2_malloc(new_children_size, (void**) &new_children);
+	if(err) {
+		LogError("Error while allocating memory for children array "
+			"expansion: %d", err);
+	}
+	else {
+		LogDebug("\tAllocated %" FMTzu " bytes.", ARGzu(new_children_size));
+		if(old_children)
+			memcpy(new_children, old_children, old_children_size);
+		new_children[new_children_len - 1] = child;
+
+		section->children = new_children;
+		section->children_len = new_children_len;
+
+		LogDebug("[%.*s] Expanded section from %" FMTzu " (%p) to "
+			"%" FMTzu " (%p) elements.",
+			section->obj_super.name->length,
+			section->obj_super.name->content,
+			ARGzu(old_children_len), old_children,
+			ARGzu(new_children_len), new_children);
+		LogDebug("[%.*s] Old array:",
+			section->obj_super.name->length,
+			section->obj_super.name->content);
+		{
+			size_t i;
+			for(i = 0; i < old_children_len; ++i)
+				LogDebug("[%.*s]     %" FMTzu ": %p",
+					section->obj_super.name->length,
+					section->obj_super.name->content,
+					ARGzu(i), old_children[i]);
+				
+		}
+		LogDebug("[%.*s] New array:",
+			section->obj_super.name->length,
+			section->obj_super.name->content);
+		{
+			size_t i;
+			for(i = 0; i < new_children_len; ++i)
+				LogDebug("[%.*s]     %" FMTzu ": %p",
+					section->obj_super.name->length,
+					section->obj_super.name->content,
+					ARGzu(i), new_children[i]);
+				
+		}
+
+		if(old_children) {
+			lvm2_free((void**) &old_children, old_children_size);
+		}
+	}
+
+	return err;
 }
 
-static void lvm2_dom_section_destroy(struct lvm2_dom_section **const section)
+static void lvm2_dom_section_remove_last_child(
+		struct lvm2_dom_section *const section)
 {
+	--section->children_len;
+	section->children[section->children_len] = NULL;
+}
+
+LVM2_TEXT_EXPORT void lvm2_dom_section_destroy(
+		struct lvm2_dom_section **const section,
+		const lvm2_bool recursive)
+{
+	LogDebug("%s: Entering with section=%p recursive=%d.",
+		__FUNCTION__, section, recursive);
+	LogDebug("\t*section = %p", *section);
+
 	if((*section)->obj_super.type != LVM2_DOM_TYPE_SECTION) {
 		LogError("BUG: Wrong type (%d) of DOM object in %s.",
 			(*section)->obj_super.type, __FUNCTION__);
 		return;
+	}
+
+	LogDebug("\tname: \"%.*s\"",
+		(*section)->obj_super.name->length,
+		(*section)->obj_super.name->content);
+
+	if(recursive) {
+		size_t i;
+
+		for(i = 0; i < (*section)->children_len; ++i) {
+			LogDebug("[%.*s] Iterating %" FMTzu "/%" FMTzu ": %p",
+				(*section)->obj_super.name->length,
+				(*section)->obj_super.name->content,
+				ARGzu(i + 1), ARGzu((*section)->children_len),
+				(*section)->children[i]);
+			
+			switch((*section)->children[i]->type) {
+			case LVM2_DOM_TYPE_VALUE:
+				LogDebug("[%.*s]     \"%.*s\": Value type.",
+					(*section)->obj_super.name->length,
+					(*section)->obj_super.name->content,
+					(*section)->children[i]->name->length,
+					(*section)->children[i]->name->content);
+				lvm2_dom_value_destroy(
+					(struct lvm2_dom_value**)
+					(&(*section)->children[i]));
+				break;
+			case LVM2_DOM_TYPE_SECTION:
+				LogDebug("[%.*s]     \"%.*s\": Section type.",
+					(*section)->obj_super.name->length,
+					(*section)->obj_super.name->content,
+					(*section)->children[i]->name->length,
+					(*section)->children[i]->name->content);
+				lvm2_dom_section_destroy(
+					(struct lvm2_dom_section**)
+					&((*section)->children[i]),
+					LVM2_TRUE);
+				break;
+			case LVM2_DOM_TYPE_ARRAY:
+				LogDebug("[%.*s]     \"%.*s\": Array type.",
+					(*section)->obj_super.name->length,
+					(*section)->obj_super.name->content,
+					(*section)->children[i]->name->length,
+					(*section)->children[i]->name->content);
+				lvm2_dom_array_destroy(
+					(struct lvm2_dom_array**)
+					&((*section)->children[i]),
+					LVM2_TRUE);
+				break;
+			default:
+				LogError("Unknown DOM type: %d Leaking...",
+					(*section)->children[i]->type);
+				break;
+			};
+		}
 	}
 
 	lvm2_dom_obj_deinitialize(&(*section)->obj_super);
@@ -166,27 +516,43 @@ static void lvm2_dom_section_destroy(struct lvm2_dom_section **const section)
 	lvm2_free((void**) section, sizeof(struct lvm2_dom_section));
 }
 
-LVM2_TEXT_EXPORT void lvm2_volume_group_destroy(struct lvm2_volume_group **vg)
+static void lvm2_volume_group_destroy(struct lvm2_volume_group **vg)
 {
 	lvm2_bounded_string_destroy(&(*vg)->name);
 }
 
-LVM2_TEXT_EXPORT void parsed_lvm2_text_destroy(
-		struct parsed_lvm2_text **parsed_text)
-{
-	if((*parsed_text)->vg)
-		lvm2_volume_group_destroy(&(*parsed_text)->vg);
-	/*if(parsed_text->contents)
-		IOFree(&parsed_text->contents, parsed_text->contents_size);*/
-
-	lvm2_free((void**) parsed_text, sizeof(struct parsed_lvm2_text));
-}
 
 
 static void parsed_lvm2_text_builder_init(
 		struct parsed_lvm2_text_builder *const builder)
 {
 	memset(builder, 0, sizeof(struct parsed_lvm2_text_builder));
+}
+
+static int parsed_lvm2_text_builder_stack_push(
+		struct parsed_lvm2_text_builder *const builder,
+		struct lvm2_dom_obj *obj)
+{
+	int err;
+	size_t new_elem_size = sizeof(struct parsed_lvm2_text_builder_section);
+	struct parsed_lvm2_text_builder_section *new_elem;
+
+	err = lvm2_malloc(new_elem_size, (void**) &new_elem);
+	if(err) {
+		LogError("Error while allocating memory for new stack element: "
+			"%d", err);
+	}
+	else {
+		memset(new_elem, 0, new_elem_size);
+
+		new_elem->obj = obj;
+		new_elem->parent = builder->stack;
+
+		builder->stack = new_elem;
+		++builder->stack_depth;
+	}
+
+	return err;
 }
 
 static void parsed_lvm2_text_builder_stack_pop(
@@ -214,42 +580,109 @@ static struct lvm2_dom_section* parsed_lvm2_text_builder_finalize(
 	while(builder->stack)
 		parsed_lvm2_text_builder_stack_pop(builder);
 
+	LogDebug("%s: Returning %p.", __FUNCTION__, builder->root);
+
 	return builder->root;
+}
+
+static int parsed_lvm2_text_builder_enter_array(
+		struct parsed_lvm2_text_builder *const builder,
+		const char *const array_name, const int array_name_len)
+{
+	int err;
+	struct lvm2_dom_section *old_stack_top;
+	struct lvm2_dom_array *dom_array;
+
+	LogDebug("%s: Entering with builder=%p array_name=%p (%.*s) "
+		"section_name_len=%d",
+		__FUNCTION__, builder, array_name, array_name_len, array_name,
+		array_name_len);
+
+	if(!builder->stack) {
+		LogError("Attempted to use array as root element. Aborting...");
+		return EINVAL;
+	}
+	else if(builder->stack->obj->type != LVM2_DOM_TYPE_SECTION) {
+		LogError("Unexpected type of top stack element: %d",
+			builder->stack->obj->type);
+		return EINVAL;
+	}
+
+	old_stack_top = (struct lvm2_dom_section*) builder->stack->obj;
+
+	err = lvm2_dom_array_create(array_name, array_name_len,
+		&dom_array);
+	if(err) {
+		LogError("Error while creating DOM array: %d", err);
+	}
+	else {
+		err = lvm2_dom_section_add_child(old_stack_top,
+			&dom_array->obj_super);
+		if(err) {
+			LogError("Error while adding element to parent "
+				"array: %d", err);
+		}
+		else {
+			err = parsed_lvm2_text_builder_stack_push(builder,
+				&dom_array->obj_super);
+			if(err) {
+				LogError("Error while pushing new element to "
+					"the stack: %d",
+					err);
+			}
+
+			if(err) {
+				lvm2_dom_section_remove_last_child(
+					old_stack_top);
+			}
+		}
+
+		if(err) {
+			lvm2_dom_array_destroy(&dom_array, LVM2_FALSE);
+		}
+	}
+
+	return err;
+}
+
+static int parsed_lvm2_text_builder_leave_array(
+		struct parsed_lvm2_text_builder *const builder)
+{
+	parsed_lvm2_text_builder_stack_pop(builder);
+
+	return 0;
 }
 
 static int parsed_lvm2_text_builder_enter_section(
 		struct parsed_lvm2_text_builder *const builder,
-		const char *const section_name, const int section_name_len,
-		lvm2_bool is_array)
+		const char *const section_name, const int section_name_len)
 {
-	const size_t stack_element_size =
-		sizeof(struct parsed_lvm2_text_builder_section);
-
 	int err;
+	struct lvm2_dom_section *old_stack_top;
 	struct lvm2_dom_section *dom_section;
-	struct parsed_lvm2_text_builder_section *stack_element;
-	struct parsed_lvm2_text *parsed_text;
 
 	LogDebug("%s: Entering with builder=%p section_name=%p (%.*s) "
 		"section_name_len=%d",
 		__FUNCTION__, builder, section_name, section_name_len,
 		section_name, section_name_len);
 
+	if(builder->stack && builder->stack->obj->type != LVM2_DOM_TYPE_SECTION)
+	{
+		LogError("Unexpected type of top stack element: %d",
+			builder->stack->obj->type);
+		return EINVAL;
+	}
+
+	old_stack_top = builder->stack ?
+		(struct lvm2_dom_section*) builder->stack->obj : NULL;
+
 	err = lvm2_dom_section_create(section_name, section_name_len,
 		&dom_section);
 	if(err) {
-		dom_section = NULL;
 		LogError("Error while creating DOM section: %d", err);
 	}
-	else if((err = lvm2_malloc(stack_element_size, (void**) &stack_element))
-		!= 0)
-	{
-		stack_element = NULL;
-		LogError("Error while allocating memory for 'stack_element': "
-			"%d", err);
-	}
 	else {
-		if(!builder->stack) {
+		if(!old_stack_top) {
 			if(builder->root) {
 				LogError("Multiple documents roots! "
 					"Aborting...");
@@ -260,51 +693,118 @@ static int parsed_lvm2_text_builder_enter_section(
 			}
 		}
 		else {
-			err = lvm2_dom_section_add_child(builder->stack->obj,
+			err = lvm2_dom_section_add_child(old_stack_top,
 				&dom_section->obj_super);
 			if(err) {
 				LogError("Error while adding child to parent "
 					"section: %d", err);
 			}
 		}
-	}
 
-	if(!err) {
-		/* Push new element onto stack. */
-		stack_element->obj = dom_section;
-		stack_element->parent = builder->stack;
+		if(!err) {
+			err = parsed_lvm2_text_builder_stack_push(builder,
+				&dom_section->obj_super);
+			if(err) {
+				LogError("Error while pushing new element to "
+					"the stack: %d",
+					err);
+			}
 
-		builder->stack = stack_element;
-		++builder->stack_depth;
-	}
-	else {
-		if(parsed_text)
-			lvm2_free((void**) &parsed_text, parsed_text_size);
-		if(stack_element)
-			lvm2_free((void**) &stack_element, stack_element_size);
-		if(section_name_dup)
-			lvm2_bounded_string_destroy(&section_name_dup);
+			if(err && old_stack_top)
+				lvm2_dom_section_remove_last_child(
+					old_stack_top);
+
+		}
+
+		if(err) {
+			lvm2_dom_section_destroy(&dom_section, LVM2_FALSE);
+		}
 	}
 
 	return err;
 }
 
-static int parsed_lvm2_text_builder_leave_section(
+static void parsed_lvm2_text_builder_leave_section(
 		struct parsed_lvm2_text_builder *const builder)
 {
 	parsed_lvm2_text_builder_stack_pop(builder);
-
-	return 0;
 }
 
 static int parsed_lvm2_text_builder_array_element(
 		struct parsed_lvm2_text_builder *const builder,
 		const char *const element_name, const int element_name_len)
 {
+	int err;
+	struct lvm2_dom_array *stack_top;
+	struct lvm2_dom_value *dom_value;
+
+	if(!builder->stack) {
+		LogError("No stack in place.");
+		return EINVAL;
+	}
+	else if(builder->stack->obj->type != LVM2_DOM_TYPE_ARRAY) {
+		LogError("Top stack element is not of type array.");
+		return EINVAL;
+	}
+
+	stack_top = (struct lvm2_dom_array*) builder->stack->obj;
+
 	LogDebug("Got array element: \"%.*s\"",
 		element_name_len, element_name);
 
-	return 0;
+	err = lvm2_dom_value_create("", 0, element_name, element_name_len,
+		&dom_value);
+	if(err) {
+		LogError("Error while creating lvm2_dom_value: %d", err);
+	}
+	else {
+		err = lvm2_dom_array_add_element(stack_top, dom_value);
+		if(err) {
+			LogError("Error while adding array element: %d", err);
+		}
+	}
+
+	return err;
+}
+
+static int parsed_lvm2_text_builder_section_element(
+		struct parsed_lvm2_text_builder *const builder,
+		const char *const key_string, const int key_string_len,
+		const char *const value_string, const int value_string_len)
+{
+	int err;
+	struct lvm2_dom_section *stack_top;
+	struct lvm2_dom_value *dom_value;
+
+	if(!builder->stack) {
+		LogError("No stack in place.");
+		return EINVAL;
+	}
+	else if(builder->stack->obj->type != LVM2_DOM_TYPE_SECTION) {
+		LogError("Top stack element is not of type section.");
+		return EINVAL;
+	}
+
+	stack_top = (struct lvm2_dom_section*) builder->stack->obj;
+
+	LogDebug("Got dictionary entry: \"%.*s\" = \"%.*s\"",
+		key_string_len, key_string, value_string_len, value_string);
+
+	err = lvm2_dom_value_create(key_string, key_string_len, value_string,
+		value_string_len, &dom_value);
+	if(err) {
+		LogError("Error while creating lvm2_dom_value: %d", err);
+	}
+	else {
+		err = lvm2_dom_section_add_child(stack_top,
+			&dom_value->obj_super);
+		if(err) {
+			LogError("Error while adding dictionary element: %d",
+				err);
+		}
+	}
+
+	return err;
 }
 
 static const char tokens[] = {
@@ -547,8 +1047,7 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 				identifierToken);
 
 			err = parsed_lvm2_text_builder_enter_section(builder,
-				identifierToken, identifierTokenLen,
-				LVM2_FALSE);
+				identifierToken, identifierTokenLen);
 			if(err) {
 				return LVM2_FALSE;
 			}
@@ -559,10 +1058,7 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 				return LVM2_FALSE;
 			}
 			
-			err = parsed_lvm2_text_builder_leave_section(builder);
-			if(err) {
-				return LVM2_FALSE;
-			}
+			parsed_lvm2_text_builder_leave_section(builder);
 
 			i += bytesProcessed;
 
@@ -587,9 +1083,9 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 					prefix, ARGlu(depth),
 					identifierTokenLen, identifierToken);
 
-				err = parsed_lvm2_text_builder_enter_section(
+				err = parsed_lvm2_text_builder_enter_array(
 					builder, identifierToken,
-					identifierTokenLen, LVM2_TRUE);
+					identifierTokenLen);
 				if(err) {
 					return LVM2_FALSE;
 				}
@@ -600,7 +1096,7 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 					return LVM2_FALSE;
 				}
 
-				err = parsed_lvm2_text_builder_leave_section(
+				err = parsed_lvm2_text_builder_leave_array(
 					builder);
 				if(err) {
 					return LVM2_FALSE;
@@ -619,6 +1115,7 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 			}
 			else {
 				/* We have a plain value. */
+				int err;
 				const char *valueToken = token;
 				int valueTokenLen = tokenLen;
 
@@ -627,8 +1124,15 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 					prefix, ARGlu(depth),
 					identifierTokenLen, identifierToken,
 					valueTokenLen, valueToken);
-			}
 
+				err = parsed_lvm2_text_builder_section_element(
+					builder, identifierToken,
+					identifierTokenLen, valueToken,
+					valueTokenLen);
+				if(err) {
+					return LVM2_FALSE;
+				}
+			}
 		}
 		else {
 			LogError("Expected '=' or '{' after identifier. Got: "
@@ -646,33 +1150,224 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 
 
 LVM2_TEXT_EXPORT lvm2_bool lvm2_parse_text(const char *const text,
-		const size_t textLen, struct parsed_lvm2_text **const outResult)
+		const size_t text_len,
+		struct lvm2_dom_section **const out_result)
 {
-	lvm2_bool res;
 	int res2;
-	struct parsed_lvm2_text *result;
+	lvm2_bool res;
+	struct lvm2_dom_section *result;
 	struct parsed_lvm2_text_builder builder;
 
 	parsed_lvm2_text_builder_init(&builder);
-	res2 = parsed_lvm2_text_builder_enter_section(&builder, "", 0,
-		LVM2_FALSE);
+	res2 = parsed_lvm2_text_builder_enter_section(&builder, "", 0);
 	if(res2) {
 		LogError("Error in parsed_lvm2_text_builder_enter_section: %d",
 			res2);
 		return LVM2_FALSE;
 	}
 
-	res = parseDictionary(text, textLen, &builder, LVM2_TRUE, 0, NULL);
+	res = parseDictionary(text, text_len, &builder, LVM2_TRUE, 0, NULL);
 
-	LogDebug("Leaving section.");
-	res2 = parsed_lvm2_text_builder_leave_section(&builder);
-	LogDebug("  res2=%d", res2);
-
+	parsed_lvm2_text_builder_leave_section(&builder);
 	result = parsed_lvm2_text_builder_finalize(&builder);
-	if(!res)
-		parsed_lvm2_text_destroy(&result);
+
+	if(!res) {
+		if(result)
+			lvm2_dom_section_destroy(&result, LVM2_TRUE);
+	}
+	else if(!result) {
+		LogError("Unexpected: result == NULL after successfully "
+			"parsing dictionary.");
+		res = LVM2_FALSE;
+	}
 	else
-		*outResult = result;
+		*out_result = result;
 
 	return res;
+}
+
+static const struct lvm2_dom_obj* lvm2_dom_tree_lookup(
+		const struct lvm2_dom_section *const root_section,
+		const char **const path)
+{
+	const struct lvm2_dom_obj *cur_obj = &root_section->obj_super;
+	size_t i;
+
+	for(i = 0; path[i] != NULL; ++i) {
+		const char *const cur_elem = path[i];
+		const size_t cur_elem_len = strlen(path[i]);
+		size_t j;
+		const struct lvm2_dom_section *cur_section = NULL;
+		const struct lvm2_dom_obj *match = NULL;
+
+		if(cur_obj->type != LVM2_DOM_TYPE_SECTION) {
+			LogError("Intermediate element of non-section type in "
+				"lookup.");
+			return NULL;
+		}
+		else if(cur_elem_len > INT_MAX) {
+			LogError("'cur_elem_len' overflows: %" FMTzu,
+				ARGzu(cur_elem_len));
+			return NULL;
+		}
+
+		cur_section = (struct lvm2_dom_section*) cur_obj;
+
+		for(j = 0; j < cur_section->children_len; ++j) {
+			const struct lvm2_dom_obj *const child =
+				cur_section->children[j];
+			if(child->name->length == (int) cur_elem_len &&
+				!memcmp(child->name->content, cur_elem,
+				cur_elem_len))
+			{
+				match = child;
+				break;
+			}
+		}
+
+		if(!match) {
+			LogError("No match for \"%.*s\".",
+				(int) cur_elem_len, cur_elem);
+			return NULL;
+		}
+
+		cur_obj = match;
+	}
+
+	return cur_obj;
+}
+
+static int lvm2_layout_parse_u64_value(const struct lvm2_dom_value *value,
+		u64 *out_value)
+{
+	int i;
+	u64 result = 0;
+
+	if(value->value->length > 19)
+		return EOVERFLOW;
+
+	i = value->value->length;
+
+	for(i = 0; i < value->value->length; ++i) {
+		char cur_char =
+			value->value->content[value->value->length - 1 - i];
+
+		if(cur_char < '0' || cur_char > '9') {
+			LogError("Invalid character in numeric string: '%c'",
+				cur_char);
+			return EINVAL;
+		}
+		if
+
+		i += (cur_char - '0') * i;
+	};
+
+	return i;
+}
+
+LVM2_TEXT_EXPORT int lvm2_layout_create(
+		const struct lvm2_dom_section *root_section,
+		struct lvm2_layout **out_layout);
+		
+LVM2_TEXT_EXPORT int lvm2_layout_create(
+		const struct lvm2_dom_section *const root_section,
+		struct lvm2_layout **const out_layout)
+{
+	int err = 0;
+	size_t i;
+	const char *path_2l[3];
+	const struct lvm2_dom_obj *cur_obj = NULL;
+
+	const struct lvm2_bounded_string *vg_name = NULL;
+	const struct lvm2_dom_section *physical_volumes = NULL;
+	const struct lvm2_dom_section *logical_volumes = NULL;
+
+	err = lvm2_malloc(sizeof(struct lvm2_layout), )
+
+	/* Search for vg_name candidates. */
+	for(i = 0; i < root_section->children_len; ++i) {
+		const struct lvm2_dom_obj *child = root_section->children[i];
+		if(child->type == LVM2_DOM_TYPE_SECTION) {
+			if(vg_name) {
+				LogError("More than one sub-section in root. "
+					"Cannot determine which is the volume "
+					"group.");
+				return EINVAL;
+			}
+
+			vg_name = child->name;
+		}
+	}
+
+	{
+		path_2l[0] = vg_name->content;
+		path_2l[1] = "id";
+		path_2l[2] = NULL;
+
+		cur_obj = lvm2_dom_tree_lookup(root_section, path_2l);
+		if(!cur_obj) {
+			LogError("Could not find 'id' section.");
+			return ENOENT;
+		}
+		else if(cur_obj->type != LVM2_DOM_TYPE_VALUE) {
+			LogError("Non-section type: 'id'");
+			return ENOENT;
+		}
+
+		id = (struct lvm2_dom_value*) cur_obj;
+	}
+
+	{
+		path_2l[0] = vg_name->content;
+		path_2l[1] = "physical_volumes";
+		path_2l[2] = NULL;
+
+		cur_obj = lvm2_dom_tree_lookup(root_section, path_2l);
+		if(!cur_obj) {
+			LogError("Could not find 'physical_volumes' section.");
+			return ENOENT;
+		}
+		else if(cur_obj->type != LVM2_DOM_TYPE_SECTION) {
+			LogError("Non-section type: 'physical_volumes'");
+			return ENOENT;
+		}
+
+		physical_volumes = (struct lvm2_dom_section*) cur_obj;
+	}
+
+	
+
+	{
+		path_2l[0] = vg_name->content;
+		path_2l[1] = "logical_volumes";
+		path_2l[2] = NULL;
+
+		cur_obj = lvm2_dom_tree_lookup(root_section, path_2l);
+		if(!cur_obj) {
+			LogError("Could not find 'logical_volumes' section.");
+			return ENOENT;
+		}
+		else if(cur_obj->type != LVM2_DOM_TYPE_SECTION) {
+			LogError("Non-section type: 'logical_volumes'");
+			return ENOENT;
+		}
+
+		logical_volumes = (struct lvm2_dom_section*) cur_obj;
+	}
+
+	return err;
+}
+
+LVM2_TEXT_EXPORT void lvm2_layout_destroy(
+		struct lvm2_layout **parsed_text);
+
+LVM2_TEXT_EXPORT void lvm2_layout_destroy(
+		struct lvm2_layout **const parsed_text)
+{
+	if((*parsed_text)->vg)
+		lvm2_volume_group_destroy(&(*parsed_text)->vg);
+	/*if(parsed_text->contents)
+		IOFree(&parsed_text->contents, parsed_text->contents_size);*/
+
+	lvm2_free((void**) parsed_text, sizeof(struct lvm2_layout));
 }

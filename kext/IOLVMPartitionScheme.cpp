@@ -42,6 +42,8 @@ bool IOLVMPartitionScheme::init(OSDictionary *properties)
 	LogDebug("%s: Entering with: properties=%p.",
 		__FUNCTION__, properties);
 
+	IOLog("%s: Initializing.\n", __PRETTY_FUNCTION__);
+
 	/* Verify that the compiler didn't mess with our struct definitions. */
 	assert(sizeof(struct label_header) == 32);
 
@@ -60,6 +62,8 @@ bool IOLVMPartitionScheme::init(OSDictionary *properties)
 void IOLVMPartitionScheme::free()
 {
 	LogDebug("%s: Entering.", __FUNCTION__);
+
+	IOLog("%s: Unloading.\n", LOG_CLASSNAME);
 
 	/* Clean up our state. */
 	if(_partitions)
@@ -275,9 +279,9 @@ static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
 
 	//LogDebug("LVM2 text: %.*s", textLen, text);
 
-	struct parsed_lvm2_text *parsedText;
-	if(lvm2_parse_text(text, textLen, &parsedText)) {
-		parsed_lvm2_text_destroy(&parsedText);
+	struct lvm2_dom_section *result;
+	if(lvm2_parse_text(text, textLen, &result)) {
+		lvm2_dom_section_destroy(&result, LVM2_TRUE);
 	}
 
 	res = true;

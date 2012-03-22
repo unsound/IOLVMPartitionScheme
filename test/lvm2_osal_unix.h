@@ -105,7 +105,7 @@
 		fprintf(stderr, "\n"); \
 	} while(0)
 #else
-#define LogDebug(....) do {} while(0)
+#define LogDebug(...) do {} while(0)
 #endif /* defined(DEBUG) */
 
 #endif /* !defined(_LVM2_OSAL_UNIX_H) */

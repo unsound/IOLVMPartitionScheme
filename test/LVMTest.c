@@ -29,6 +29,9 @@
 #include "lvm2_log.h"
 #include "lvm2_text.h"
 
+/* Defined in lvm2_osal_unix.c. */
+long long lvm2_get_allocations(void);
+
 int main(int argc, char **argv) {
 	int ret = (EXIT_FAILURE);
 	int fd;
@@ -84,11 +87,18 @@ int main(int argc, char **argv) {
 						strerror(errno));
 				}
 				else {
-					struct parsed_lvm2_text *result;
-					LogError("Great success.");
-					lvm2_parse_text(file_data, file_size,
-						&result);
+					struct lvm2_dom_section *result;
+					if(lvm2_parse_text(file_data, file_size,
+						&result))
+					{
+						lvm2_dom_section_destroy(
+							&result, LVM2_TRUE);
+					}
 				}
+
+				fprintf(stderr, "Number of outstanding "
+					"allocations: %lld\n",
+					lvm2_get_allocations());
 
 				free(file_data);
 			}
