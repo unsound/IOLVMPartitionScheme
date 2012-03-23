@@ -62,23 +62,20 @@ struct lvm2_dom_array {
 
 struct lvm2_stripe {
 	struct lvm2_bounded_string *pv_name;
-	s64 extentStart;
+	u64 extent_start;
 };
 
-struct lvm2_logical_volume_segment {
-	struct lvm2_bounded_string *name;
-	s64 start_extent;
-	s64 extent_count;
+struct lvm2_segment {
+	u64 start_extent;
+	u64 extent_count;
 	struct lvm2_bounded_string *type;
-	union {
-		struct {
-			s64 stripe_count;
-			struct lvm2_stripe *stripes;
-		} striped;
-	};
+	u64 stripe_count;
+	size_t stripes_len;
+	struct lvm2_stripe **stripes;
 };
 
 typedef enum {
+	LVM2_LOGICAL_VOLUME_STATUS_NONE = 0x0,
 	LVM2_LOGICAL_VOLUME_STATUS_READ = 0x1,
 	LVM2_LOGICAL_VOLUME_STATUS_WRITE = 0x2,
 	LVM2_LOGICAL_VOLUME_STATUS_VISIBLE = 0x3,
@@ -91,15 +88,15 @@ typedef enum {
 struct lvm2_logical_volume {
 	struct lvm2_bounded_string *name;
 	struct lvm2_bounded_string *id;
-	struct lvm2_bounded_string *device;
 	lvm2_logical_volume_status status;
 	lvm2_logical_volume_flags flags;
-	s64 segment_count;
+	u64 segment_count;
 	size_t segments_len;
-	struct lvm2_logical_volume_segment *segments;
+	struct lvm2_segment **segments;
 };
 
 typedef enum {
+	LVM2_PHYSICAL_VOLUME_STATUS_NONE = 0x0,
 	LVM2_PHYSICAL_VOLUME_STATUS_ALLOCATABLE = 0x1,
 } lvm2_physical_volume_status;
 
@@ -113,12 +110,13 @@ struct lvm2_physical_volume {
 	struct lvm2_bounded_string *device;
 	lvm2_physical_volume_status status;
 	lvm2_physical_volume_flags flags;
-	s64 dev_size;
-	s64 pe_start;
-	s64 pe_count;
+	u64 dev_size;
+	u64 pe_start;
+	u64 pe_count;
 };
 
 typedef enum {
+	LVM2_VOLUME_GROUP_STATUS_NONE = 0x0,
 	LVM2_VOLUME_GROUP_STATUS_RESIZEABLE = 0x1,
 	LVM2_VOLUME_GROUP_STATUS_READ = 0x2,
 	LVM2_VOLUME_GROUP_STATUS_WRITE = 0x4,
@@ -129,28 +127,28 @@ typedef enum {
 } lvm2_volume_group_flags;
 
 struct lvm2_volume_group {
-	struct lvm2_bounded_string *name;
 	struct lvm2_bounded_string *id;
-	s64 seqno;
+	u64 seqno;
 	lvm2_volume_group_status status;
 	lvm2_volume_group_flags flags;
-	s64 extent_size;
-	s64 max_lv;
-	s64 max_pv;
-	s64 metadata_copies;
+	u64 extent_size;
+	u64 max_lv;
+	u64 max_pv;
+	u64 metadata_copies;
 	size_t physical_volumes_len;
-	struct lvm2_physical_volume *physical_volumes;
+	struct lvm2_physical_volume **physical_volumes;
 	size_t logical_volumes_len;
-	struct lvm2_logical_volume *logical_volumes;
+	struct lvm2_logical_volume **logical_volumes;
 };
 
 struct lvm2_layout {
+	struct lvm2_bounded_string *vg_name;
 	struct lvm2_volume_group *vg;
 	struct lvm2_bounded_string *contents;
-	int version;
+	u64 version;
 	struct lvm2_bounded_string *description;
 	struct lvm2_bounded_string *creation_host;
-	struct lvm2_bounded_string *creation_time;
+	u64 creation_time;
 };
 
 struct parsed_lvm2_text_builder_section {
@@ -165,13 +163,18 @@ struct parsed_lvm2_text_builder {
 	struct parsed_lvm2_text_builder_section *stack;
 };
 
-u32 lvm2_calc_crc(u32 initial, const void *buf, u32 size);
+u32 lvm2_calc_crc(u32 initial, const void *buf, size_t size);
 
 lvm2_bool lvm2_parse_text(const char *const text, const size_t text_len,
 		struct lvm2_dom_section **const out_result);
 
 void lvm2_dom_section_destroy(struct lvm2_dom_section **section,
 		lvm2_bool recursive);
+
+int lvm2_layout_create(const struct lvm2_dom_section *root_section,
+		struct lvm2_layout **out_layout);
+
+void lvm2_layout_destroy(struct lvm2_layout **parsed_text);
 
 #ifdef __cplusplus
 }

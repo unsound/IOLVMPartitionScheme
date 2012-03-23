@@ -30,7 +30,9 @@
 #define LVM2_TEXT_EXPORT
 #endif
 
-LVM2_TEXT_EXPORT u32 lvm2_calc_crc(u32 initial, const void *buf, u32 size)
+#define LogTrace(...)
+
+LVM2_TEXT_EXPORT u32 lvm2_calc_crc(u32 initial, const void *buf, size_t size)
 {
 	static const u32 crctab[] = {
 		0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
@@ -38,12 +40,13 @@ LVM2_TEXT_EXPORT u32 lvm2_calc_crc(u32 initial, const void *buf, u32 size)
 		0xedb88320, 0xf00f9344, 0xd6d6a3e8, 0xcb61b38c,
 		0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c,
 	};
-	u32 i, crc = initial;
+	size_t i;
+	u32 crc = initial;
 	const u8 *data = (const u8*) buf;
 
-	LogDebug("%s: Entering with initial=0x%08" FMTlX " buf=%p "
-		"size=%" FMTlu ".",
-		__FUNCTION__, ARGlX(initial), buf, ARGlu(size));
+	LogTrace("%s: Entering with initial=0x%08" FMTlX " buf=%p "
+		"size=%" FMTzu ".",
+		__FUNCTION__, ARGlX(initial), buf, ARGzu(size));
 
 	for(i = 0; i < size; i++) {
 		crc ^= *data++;
@@ -71,6 +74,29 @@ static int lvm2_bounded_string_create(const char *const content,
 		string->content[length] = '\0';
 
 		*out_string = string;
+	}
+
+	return err;
+}
+
+static int lvm2_bounded_string_dup(const struct lvm2_bounded_string *const orig,
+		struct lvm2_bounded_string **const out_dup)
+{
+	int err;
+	struct lvm2_bounded_string *dup;
+
+	if(orig->length < 0)
+		return EINVAL;
+
+	err = lvm2_malloc(sizeof(struct lvm2_bounded_string) +
+		((orig->length + 1) * sizeof(char)), (void**) &dup);
+	if(!err) {
+		dup->length = orig->length;
+		memcpy(dup->content, orig->content,
+			orig->length * sizeof(char));
+		dup->content[orig->length] = '\0';
+
+		*out_dup = dup;
 	}
 
 	return err;
@@ -160,9 +186,9 @@ static int lvm2_dom_value_create(const char *const value_name,
 
 static void lvm2_dom_value_destroy(struct lvm2_dom_value **const value)
 {
-	LogDebug("%s: Entering with value=%p.",
+	LogTrace("%s: Entering with value=%p.",
 		__FUNCTION__, value);
-	LogDebug("\t*value = %p", *value);
+	LogTrace("\t*value = %p", *value);
 
 	if((*value)->obj_super.type != LVM2_DOM_TYPE_VALUE) {
 		LogError("BUG: Wrong type (%d) of DOM object in %s.",
@@ -223,7 +249,7 @@ static int lvm2_dom_array_add_element(struct lvm2_dom_array *const array,
 	size_t old_elements_size;
 	size_t new_elements_size;
 
-	LogDebug("%s: Entering with array=%p element=%p.",
+	LogTrace("%s: Entering with array=%p element=%p.",
 		__FUNCTION__, array, element);
 
 	if(!array) {
@@ -269,9 +295,9 @@ static int lvm2_dom_array_add_element(struct lvm2_dom_array *const array,
 static void lvm2_dom_array_destroy(struct lvm2_dom_array **const array,
 		const lvm2_bool recursive)
 {
-	LogDebug("%s: Entering with array=%p recursive=%d.",
+	LogTrace("%s: Entering with array=%p recursive=%d.",
 		__FUNCTION__, array, recursive);
-	LogDebug("\t*array = %p", *array);
+	LogTrace("\t*array = %p", *array);
 
 	if((*array)->obj_super.type != LVM2_DOM_TYPE_ARRAY) {
 		LogError("BUG: Wrong type (%d) of DOM object in %s.",
@@ -283,7 +309,7 @@ static void lvm2_dom_array_destroy(struct lvm2_dom_array **const array,
 		size_t i;
 
 		for(i = 0; i < (*array)->elements_len; ++i) {
-			LogDebug("\t(*array)->elements[%" FMTzu "] = %p",
+			LogTrace("\t(*array)->elements[%" FMTzu "] = %p",
 				ARGzu(i), (*array)->elements[i]);
 		}
 
@@ -351,7 +377,7 @@ static int lvm2_dom_section_add_child(struct lvm2_dom_section *const section,
 	size_t old_children_size;
 	size_t new_children_size;
 
-	LogDebug("%s: Entering with section=%p child=%p.",
+	LogTrace("%s: Entering with section=%p child=%p.",
 		__FUNCTION__, section, child);
 
 	if(!section) {
@@ -364,16 +390,16 @@ static int lvm2_dom_section_add_child(struct lvm2_dom_section *const section,
 	}
 
 	old_children = section->children;
-	LogDebug("old_children=%p", old_children);
+	LogTrace("old_children=%p", old_children);
 	old_children_len = section->children_len;
-	LogDebug("old_children_len=%" FMTzu, ARGzu(old_children_len));
+	LogTrace("old_children_len=%" FMTzu, ARGzu(old_children_len));
 	old_children_size = old_children_len * sizeof(struct lvm2_dom_obj*);
-	LogDebug("old_children_size=%" FMTzu, ARGzu(old_children_size));
+	LogTrace("old_children_size=%" FMTzu, ARGzu(old_children_size));
 
 	new_children_len = old_children_len + 1;
-	LogDebug("new_children_len=%" FMTzu, ARGzu(new_children_len));
+	LogTrace("new_children_len=%" FMTzu, ARGzu(new_children_len));
 	new_children_size = new_children_len * sizeof(struct lvm2_dom_obj*);
-	LogDebug("Allocating %" FMTzu " bytes...", ARGzu(new_children_size));
+	LogTrace("Allocating %" FMTzu " bytes...", ARGzu(new_children_size));
 	err = lvm2_malloc(new_children_size, (void**) &new_children);
 	if(err) {
 		LogError("Error while allocating memory for children array "
@@ -388,6 +414,7 @@ static int lvm2_dom_section_add_child(struct lvm2_dom_section *const section,
 		section->children = new_children;
 		section->children_len = new_children_len;
 
+		/*
 		LogDebug("[%.*s] Expanded section from %" FMTzu " (%p) to "
 			"%" FMTzu " (%p) elements.",
 			section->obj_super.name->length,
@@ -418,6 +445,7 @@ static int lvm2_dom_section_add_child(struct lvm2_dom_section *const section,
 					ARGzu(i), new_children[i]);
 				
 		}
+		*/
 
 		if(old_children) {
 			lvm2_free((void**) &old_children, old_children_size);
@@ -516,13 +544,6 @@ LVM2_TEXT_EXPORT void lvm2_dom_section_destroy(
 	lvm2_free((void**) section, sizeof(struct lvm2_dom_section));
 }
 
-static void lvm2_volume_group_destroy(struct lvm2_volume_group **vg)
-{
-	lvm2_bounded_string_destroy(&(*vg)->name);
-}
-
-
-
 static void parsed_lvm2_text_builder_init(
 		struct parsed_lvm2_text_builder *const builder)
 {
@@ -593,7 +614,7 @@ static int parsed_lvm2_text_builder_enter_array(
 	struct lvm2_dom_section *old_stack_top;
 	struct lvm2_dom_array *dom_array;
 
-	LogDebug("%s: Entering with builder=%p array_name=%p (%.*s) "
+	LogTrace("%s: Entering with builder=%p array_name=%p (%.*s) "
 		"section_name_len=%d",
 		__FUNCTION__, builder, array_name, array_name_len, array_name,
 		array_name_len);
@@ -661,7 +682,7 @@ static int parsed_lvm2_text_builder_enter_section(
 	struct lvm2_dom_section *old_stack_top;
 	struct lvm2_dom_section *dom_section;
 
-	LogDebug("%s: Entering with builder=%p section_name=%p (%.*s) "
+	LogTrace("%s: Entering with builder=%p section_name=%p (%.*s) "
 		"section_name_len=%d",
 		__FUNCTION__, builder, section_name, section_name_len,
 		section_name, section_name_len);
@@ -966,7 +987,7 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 	//UInt32 level = 0;
 	char prefix[5];
 
-	LogDebug("%s: Entering with text=%p textLen=%" FMTzu " builder=%p "
+	LogTrace("%s: Entering with text=%p textLen=%" FMTzu " builder=%p "
 		"isRoot=%d depth=%" FMTlu " outBytesProcessed=%p.",
 		__FUNCTION__, text, ARGzu(textLen), builder, isRoot,
 		ARGlu(depth), outBytesProcessed);
@@ -1186,6 +1207,66 @@ LVM2_TEXT_EXPORT lvm2_bool lvm2_parse_text(const char *const text,
 	return res;
 }
 
+static int lvm2_parse_u64_value(const char *const string_value,
+		const int string_value_len, u64 *const out_value)
+{
+	int i;
+	u64 result = 0;
+
+	if(string_value_len > 19)
+		return EOVERFLOW;
+
+	/*LogDebug("%s parsing string value \"%.*s\" to u64...",
+		__FUNCTION__, string_value_len, string_value);*/
+
+	i = string_value_len;
+
+	for(i = 0; i < string_value_len; ++i) {
+		int j;
+		char cur_char =
+			string_value[string_value_len - 1 - i];
+		char cur_digit;
+		u64 cur_value;
+
+		if(cur_char < '0' || cur_char > '9') {
+			LogError("Invalid character in numeric string: '%c'",
+				cur_char);
+			return EINVAL;
+		}
+		/*LogDebug("\t[%d] cur_char='%c'", i, cur_char);*/
+
+		cur_digit = cur_char - '0';
+		/*LogDebug("\t[%d] cur_digit=%d", i, cur_digit);*/
+
+		if(i == 18 && cur_digit > 1)
+			return EOVERFLOW;
+
+		cur_value = (u64) cur_digit;
+		for(j = 0; j < i; ++j)
+			cur_value *= 10;
+		/*LogDebug("\t[%d] cur_value=%" FMTllu, i, ARGllu(cur_value));*/
+
+		if(result > 0xFFFFFFFFFFFFFFFFULL - cur_value)
+			return EOVERFLOW;
+
+		result += cur_value;
+	};
+
+	/* LogDebug("\tfinal result: %" FMTllu, ARGllu(result)); */
+
+	*out_value = result;
+
+	return 0;
+}
+
+static int lvm2_layout_parse_u64_value(const struct lvm2_dom_value *value,
+		u64 *out_value)
+{
+	return lvm2_parse_u64_value(value->value->content,
+		value->value->length, out_value);
+}
+
+#if 0
 static const struct lvm2_dom_obj* lvm2_dom_tree_lookup(
 		const struct lvm2_dom_section *const root_section,
 		const char **const path)
@@ -1237,137 +1318,1781 @@ static const struct lvm2_dom_obj* lvm2_dom_tree_lookup(
 	return cur_obj;
 }
 
-static int lvm2_layout_parse_u64_value(const struct lvm2_dom_value *value,
-		u64 *out_value)
+static int lvm2_dom_tree_lookup_string(
+		const struct lvm2_dom_section *const root_section,
+		const char **const path,
+		struct lvm2_bounded_string **const out_result)
 {
-	int i;
-	u64 result = 0;
+	int err;
+	const struct lvm2_dom_obj *dom_obj = NULL;
+	const struct lvm2_bounded_string *dom_string = NULL;
+	struct lvm2_bounded_string *result = NULL;
 
-	if(value->value->length > 19)
-		return EOVERFLOW;
+	dom_obj = lvm2_dom_tree_lookup(root_section, path);
+	if(!dom_obj) {
+		LogError("Could not find 'id' section.");
+		return ENOENT;
+	}
+	else if(dom_obj->type != LVM2_DOM_TYPE_VALUE) {
+		LogError("Non-value type.");
+		return ENOENT;;
+	}
 
-	i = value->value->length;
+	dom_string = ((struct lvm2_dom_value*) dom_obj)->value;
 
-	for(i = 0; i < value->value->length; ++i) {
-		char cur_char =
-			value->value->content[value->value->length - 1 - i];
+	err = lvm2_bounded_string_dup(dom_string, &result);
+	if(err) {
+		LogError("Error while duplicating bounded string.", err);
+		return err;
+	}
 
-		if(cur_char < '0' || cur_char > '9') {
-			LogError("Invalid character in numeric string: '%c'",
-				cur_char);
-			return EINVAL;
-		}
-		if
+	*out_result = result;
 
-		i += (cur_char - '0') * i;
-	};
-
-	return i;
+	return 0;
 }
 
-LVM2_TEXT_EXPORT int lvm2_layout_create(
-		const struct lvm2_dom_section *root_section,
-		struct lvm2_layout **out_layout);
+static int lvm2_dom_tree_lookup_u64(
+		const struct lvm2_dom_section *const root_section,
+		const char **const path, u64 *const out_result)
+{
+	const struct lvm2_dom_obj *dom_obj = NULL;
+	int err;
+
+	dom_obj = lvm2_dom_tree_lookup(root_section, path);
+	if(!dom_obj) {
+		LogError("Could not find 'id' section.");
+		return ENOENT;
+	}
+	else if(dom_obj->type != LVM2_DOM_TYPE_VALUE) {
+		LogError("Non-value type.");
+		return ENOENT;;
+	}
+	
+	err = lvm2_layout_parse_u64_value((struct lvm2_dom_value*) dom_obj,
+		out_result);
+	if(err) {
+		LogError("Error while parsing integer value: %d", err);
+		return err;
+	}
+
+	return 0;
+}
+#endif
+
+static int lvm2_stripe_create(const struct lvm2_bounded_string *const pv_name,
+		const u64 extent_start, struct lvm2_stripe **const out_stripe)
+{
+	int err;
+	struct lvm2_stripe *stripe = NULL;
+	struct lvm2_bounded_string *dup_pv_name = NULL;
+
+	err = lvm2_malloc(sizeof(struct lvm2_stripe), (void**) &stripe);
+	if(err) {
+		LogError("Error while allocating memory for struct "
+			"lvm2_stripe: %d", err);
+	}
+	else if((err = lvm2_bounded_string_dup(pv_name, &dup_pv_name)) != 0) {
+		LogError("Error while duplicating bounded string: %d", err);
+	}
+
+	if(err) {
+		if(dup_pv_name)
+			lvm2_bounded_string_destroy(&dup_pv_name);
+		if(stripe)
+			lvm2_free((void**) &stripe, sizeof(struct lvm2_stripe));
+	}
+	else {
+		stripe->pv_name = dup_pv_name;
+		stripe->extent_start = extent_start;
+
+		*out_stripe = stripe;
+	}
+
+	return err;
+}
+
+static void lvm2_stripe_destroy(struct lvm2_stripe **const stripe)
+{
+	lvm2_bounded_string_destroy(&(*stripe)->pv_name);
+
+	lvm2_free((void**) stripe, sizeof(struct lvm2_stripe));
+}
+
+static int lvm2_segment_create(
+		const struct lvm2_dom_section *const segment_section,
+		struct lvm2_segment **const out_segment)
+{
+	int err;
+	size_t i;
+	struct lvm2_segment *segment = NULL;
+
+	lvm2_bool start_extent_defined = LVM2_FALSE;
+	u64 start_extent = 0;
+
+	lvm2_bool extent_count_defined = LVM2_FALSE;
+	u64 extent_count = 0;
+
+	struct lvm2_bounded_string *type = NULL;
+
+	lvm2_bool stripe_count_defined = LVM2_FALSE;
+	u64 stripe_count = 0;
+
+	size_t stripes_len = 0;
+	struct lvm2_stripe **stripes = NULL;
+
+	for(i = 0; i < segment_section->children_len; ++i) {
+		const struct lvm2_dom_obj *const cur_obj =
+			segment_section->children[i];
+		const struct lvm2_bounded_string *const name = cur_obj->name;
+
+		if(cur_obj->type == LVM2_DOM_TYPE_VALUE) {
+			const struct lvm2_dom_value *const value =
+				(struct lvm2_dom_value*) cur_obj;
+
+			if(!strncmp(name->content, "start_extent",
+				name->length))
+			{
+				if(start_extent_defined) {
+					LogError("Duplicate definition of "
+						"'start_extent'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&start_extent);
+				if(err)
+					break;
+
+				start_extent_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "extent_count",
+				name->length))
+			{
+				if(extent_count_defined) {
+					LogError("Duplicate definition of "
+						"'extent_count'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&extent_count);
+				if(err)
+					break;
+
+				extent_count_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "type", name->length)) {
+				if(type) {
+					LogError("Duplicate definition of "
+						"'type'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&type);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "stripe_count",
+				name->length))
+			{
+				if(stripe_count_defined) {
+					LogError("Duplicate definition of "
+						"'stripe_count'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&stripe_count);
+				if(err)
+					break;
+
+				stripe_count_defined = LVM2_TRUE;
+			}
+			else {
+				LogError("Unrecognized value-type member in "
+					"lvm2_segment: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(cur_obj->type == LVM2_DOM_TYPE_ARRAY) {
+			struct lvm2_dom_array *const array =
+				(struct lvm2_dom_array*) cur_obj;
+
+			if(!strncmp(name->content, "stripes", name->length))
+			{
+				size_t j;
+				struct lvm2_stripe **new_stripes = NULL;
+				size_t new_stripes_len;
+
+				if(stripes) {
+					LogError("Duplicate definition of "
+						"'stripes'.");
+					err = EINVAL;
+					break;
+				}
+
+				if(array->elements_len % 2 != 0) {
+					LogError("Uneven 'stripes' array "
+						"length: %" FMTzu,
+						ARGzu(array->elements_len));
+					err = EINVAL;
+					break;
+				}
+
+				new_stripes_len = array->elements_len / 2;
+
+				err = lvm2_malloc(new_stripes_len *
+					sizeof(struct lvm2_stripe*),
+					(void**) &new_stripes);
+				if(err) {
+					LogError("Error while allocating "
+						"memory for 'new_stripes' "
+						"array.");
+					break;
+				}
+
+				memset(new_stripes, 0, new_stripes_len *
+					sizeof(struct lvm2_stripe*));
+
+				for(j = 0; j < new_stripes_len; ++j) {
+					const struct lvm2_dom_value
+						*const pv_name_obj =
+						array->elements[j];
+					const struct lvm2_dom_value
+						*const extent_start_obj =
+						array->elements[j+1];
+
+					const struct lvm2_bounded_string
+						*const pv_name =
+						pv_name_obj->value;
+					u64 extent_start = 0;
+
+					struct lvm2_stripe *stripe = NULL;
+
+					err = lvm2_layout_parse_u64_value(
+						extent_start_obj,
+						&extent_start);
+					if(err) {
+						LogError("Error while parsing "
+							"u64 value: %d", err);
+						break;
+					}
+
+					err = lvm2_stripe_create(pv_name,
+						extent_start, &stripe);
+					if(err) {
+						LogError("Error while creating "
+							"'lvm2_stripe': %d",
+							err);
+						break;
+					}
+
+					new_stripes[j] = stripe;
+				}
+
+				if(err) {
+					for(j = 0; j < new_stripes_len; ++j) {
+						if(new_stripes[j]) {
+							lvm2_stripe_destroy(
+								&new_stripes[j]
+							);
+						}
+					}
+
+					lvm2_free((void**) &new_stripes,
+						new_stripes_len *
+						sizeof(struct lvm2_stripe*));
+				}
+				else {
+					stripes = new_stripes;
+					stripes_len = new_stripes_len;
+				}
+			}
+			else {
+				LogError("Unrecognized array-type member in "
+					"lvm2_segment: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(cur_obj->type == LVM2_DOM_TYPE_SECTION) {
+			if(0) {
+				/* No known section-type member in segment. */
+			}
+			else {
+				LogError("Unrecognized section-type member in "
+					"lvm2_segment: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else {
+			LogError("Unrecognized child type: %d", cur_obj->type);
+			err = EINVAL;
+			break;
+		}
+	}
+
+	if(!err) {
+		if(!start_extent_defined ||
+			!extent_count_defined ||
+			!type ||
+			!stripe_count_defined ||
+			!stripes_len ||
+			!stripes)
+		{
+			LogError("Missing members in lvm2_segment.");
+			err = EINVAL;
+		}
+	}
+
+	if(!err) {
+		err = lvm2_malloc(sizeof(struct lvm2_segment),
+			(void**) &segment);
+		if(err) {
+			LogError("Error while allocating memory for struct "
+				"lvm2_segment: %d",
+				err);
+		}
+		else
+			memset(segment, 0, sizeof(struct lvm2_segment));
+	}
+
+	if(!err) {
+		segment->start_extent = start_extent;
+		segment->extent_count = extent_count;
+		segment->type = type;
+		segment->stripe_count = stripe_count;
+		segment->stripes_len = stripes_len;
+		segment->stripes = stripes;
+
+		*out_segment = segment;
+	}
+	else {
+		if(segment)
+			lvm2_free((void**) &segment,
+				sizeof(struct lvm2_segment));
+		if(stripes) {
+			size_t j;
+
+			for(j = 0; j < stripes_len; ++j) {
+				lvm2_stripe_destroy(&stripes[j]);
+			}
+
+			stripes_len = 0;
+			lvm2_free((void**) &stripes,
+				stripes_len * sizeof(struct lvm2_stripe*));
+		}
+		if(type)
+			lvm2_bounded_string_destroy(&type);
+	}
+
+	return err;
+}
+
+static void lvm2_segment_destroy(struct lvm2_segment **const segment)
+{
+	size_t i;
+
+	lvm2_bounded_string_destroy(&(*segment)->type);
+
+
+	for(i = 0; i < (*segment)->stripes_len; ++i) {
+		lvm2_stripe_destroy(&(*segment)->stripes[i]);
+	}
+
+	(*segment)->stripes_len = 0;
+	lvm2_free((void**) &(*segment)->stripes,
+		(*segment)->stripes_len * sizeof(struct lvm2_stripe*));
+	
+
+	lvm2_free((void**) segment, sizeof(struct lvm2_segment));
+}
+
+static int lvm2_logical_volume_create(
+		const struct lvm2_bounded_string *const lv_name,
+		const struct lvm2_dom_section *const lv_section,
+		struct lvm2_logical_volume **const out_lv)
+{
+	int err;
+	size_t i;
+	struct lvm2_logical_volume *lv = NULL;
+
+	struct lvm2_bounded_string *lv_name_dup = NULL;
+
+	struct lvm2_bounded_string *id = NULL;
+
+	lvm2_bool status_defined = LVM2_FALSE;
+	lvm2_logical_volume_status status = 0;
+
+	lvm2_bool flags_defined = LVM2_FALSE;
+	lvm2_logical_volume_flags flags = 0;
+
+	lvm2_bool segment_count_defined = LVM2_FALSE;
+	u64 segment_count = 0;
+
+	size_t segments_len = 0;
+	struct lvm2_segment **segments = NULL;
+
+	for(i = 0; i < lv_section->children_len; ++i) {
+		const struct lvm2_dom_obj *const cur_obj =
+			lv_section->children[i];
+		const lvm2_dom_type type = cur_obj->type;
+		const struct lvm2_bounded_string *const name = cur_obj->name;
+
+		if(type == LVM2_DOM_TYPE_VALUE) {
+			const struct lvm2_dom_value *const value =
+				(struct lvm2_dom_value*) cur_obj;
+
+			if(!strncmp(name->content, "id", name->length)) {
+				if(id) {
+					LogError("Duplicate definition of "
+						"'id'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&id);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "segment_count",
+				name->length))
+			{
+				if(segment_count_defined) {
+					LogError("Duplicate definition of "
+						"'segment_count'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&segment_count);
+				if(err)
+					break;
+
+				segment_count_defined = LVM2_TRUE;
+			}
+			else {
+				LogError("Unrecognized value-type member in "
+					"lvm2_logical_volume: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(type == LVM2_DOM_TYPE_ARRAY) {
+			const struct lvm2_dom_array *const array =
+				(struct lvm2_dom_array*) cur_obj;
+
+			if(!strncmp(name->content, "status", name->length)) {
+				size_t j;
+
+				if(status_defined) {
+					LogError("Duplicate definition of "
+						"'status'.");
+					err = EINVAL;
+					break;
+				}
+
+				status = 0;
+				for(j = 0; j < array->elements_len; ++j) {
+					char *value = array->elements[j]->
+						value->content;
+					int value_len = array->elements[j]->
+						value->length;
+
+					if(!strncmp("READ", value,
+						value_len))
+					{
+						status |= LVM2_LOGICAL_VOLUME_STATUS_READ;
+					}
+					else if(!strncmp("WRITE", value,
+						value_len))
+					{
+						status |= LVM2_LOGICAL_VOLUME_STATUS_WRITE;
+					}
+					else if(!strncmp("VISIBLE", value,
+						value_len))
+					{
+						status |= LVM2_LOGICAL_VOLUME_STATUS_VISIBLE;
+					}
+					else {
+						LogError("Unrecognized value "
+							"in 'status' array: "
+							"'%.*s'",
+							value_len, value);
+						err = EINVAL;
+						break;
+					}
+				}
+
+				if(err)
+					break;
+
+				status_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "flags", name->length))
+			{
+				size_t j;
+
+				if(flags_defined) {
+					LogError("Duplicate definition of "
+						"'flags'.");
+					err = EINVAL;
+					break;
+				}
+
+				flags = 0;
+
+				for(j = 0; j < array->elements_len; ++j) {
+					char *value = array->elements[j]->
+						value->content;
+					int value_len = array->elements[j]->
+						value->length;
+
+					if(0) {
+						/* Currently we don't have any
+						 * known values for 'flags'.
+						 * Read the LVM2 source. */
+					}
+					else {
+						LogError("Unrecognized value "
+							"in 'flags' array: "
+							"'%.*s'",
+							value_len, value);
+						err = EINVAL;
+						break;
+					}
+				}
+
+				if(err)
+					break;
+
+				flags_defined = LVM2_TRUE;
+			}
+			else {
+				LogError("Unrecognized array-type member in "
+					"lvm2_logical_volume: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(type == LVM2_DOM_TYPE_SECTION) {
+			struct lvm2_dom_section *const section =
+				(struct lvm2_dom_section*) cur_obj;
+			u64 segment_number;
+
+			if(name->length > 7 &&
+				!strncmp(name->content, "segment", 7) &&
+				!(err = lvm2_parse_u64_value(&name->content[7],
+				name->length - 7, &segment_number)) &&
+				segment_number == (segments_len + 1))
+			{
+				/* Note that we assume that segments come in
+				 * order. Otherwise we refuse to parse. This can
+				 * be improved if needed, but I don't think it
+				 * will be necessary. */
+
+				/* Expand 'segments' array. */
+				struct lvm2_segment **new_segments = NULL;
+				size_t new_segments_len = segments_len + 1;
+
+				struct lvm2_segment **old_segments = segments;
+				size_t old_segments_len = segments_len;
+
+				struct lvm2_segment *new_segment = NULL;
+
+				err = lvm2_malloc(new_segments_len *
+					sizeof(struct lvm2_segment*),
+					(void**) &new_segments);
+				if(err)
+					break;
+
+				if(old_segments && old_segments_len) {
+					memcpy(new_segments, old_segments,
+						old_segments_len *
+						sizeof(struct lvm2_segment*));
+				}
+
+				err = lvm2_segment_create(section,
+					&new_segment);
+				if(err) {
+					/* Clean up new_segments allocation. */
+					lvm2_free((void**) &new_segments,
+						new_segments_len *
+						sizeof(struct lvm2_segment*));
+					break;
+				}
+
+				new_segments[old_segments_len] = new_segment;
+
+				segments = new_segments;
+				segments_len = new_segments_len;
+
+				if(old_segments) {
+					lvm2_free((void**) &old_segments,
+						old_segments_len *
+						sizeof(struct lvm2_segment*));
+				}
+			}
+			else {
+				LogError("Unrecognized array-type member in "
+					"lvm2_logical_volume: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else {
+			LogError("Unrecognized child type: %d", type);
+			err = EINVAL;
+			break;
+		}
+	}
+
+	if(!err) {
+		err = lvm2_bounded_string_dup(lv_name, &lv_name_dup);
+		if(err) {
+			LogError("Error while duplicating string: %d", err);
+		}
+	}
+
+	if(!err) {
+		if(!lv_name_dup ||
+			!id ||
+			!status_defined ||
+			!flags_defined ||
+			!segment_count_defined ||
+			!segments_len ||
+			!segments)
+		{
+			LogError("Missing members in lvm2_logical_volume.");
+			err = EINVAL;
+		}
+	}
+
+	if(!err) {
+		if(segment_count != segments_len) {
+			LogError("'segment_count' doesn't match the actual "
+				"number of segments.");
+			err = EINVAL;
+		}
+	}
+
+	if(!err) {
+		err = lvm2_malloc(sizeof(struct lvm2_logical_volume),
+			(void**) &lv);
+		if(err) {
+			LogError("Error while allocating memory for struct "
+				"lvm2_logical_volume: %d",
+				err);
+		}
+		else
+			memset(lv, 0, sizeof(struct lvm2_logical_volume));
+	}
+
+	if(!err) {
+		lv->name = lv_name_dup;
+		lv->id = id;
+		lv->status = status;
+		lv->flags = flags;
+		lv->segment_count = segment_count;
+		lv->segments_len = segments_len;
+		lv->segments = segments;
+
+		*out_lv = lv;
+	}
+	else {
+		if(lv)
+			lvm2_free((void**) &lv,
+				sizeof(struct lvm2_logical_volume));
+
+		if(lv_name_dup)
+			lvm2_bounded_string_destroy(&lv_name_dup);
+
+		if(segments_len) {
+			size_t j;
+
+			for(j = 0; j < segments_len; ++j) {
+				lvm2_segment_destroy(&segments[j]);
+			}
+
+			lvm2_free((void**) &segments,
+				segments_len * sizeof(struct lvm2_segment*));
+	}
+		if(id)
+			lvm2_bounded_string_destroy(&id);
+	}
+
+	return err;
+}
+
+static void lvm2_logical_volume_destroy(struct lvm2_logical_volume **lv)
+{
+	lvm2_bounded_string_destroy(&(*lv)->name);
+
+	if(&(*lv)->segments_len) {
+		size_t i;
+
+		for(i = 0; i < (*lv)->segments_len; ++i) {
+			lvm2_segment_destroy(&(*lv)->segments[i]);
+		}
+
+		lvm2_free((void**) &(*lv)->segments,
+			(*lv)->segments_len * sizeof(struct lvm2_segment*));
+	}
+
+	lvm2_bounded_string_destroy(&(*lv)->id);
+
+	lvm2_free((void**) lv, sizeof(struct lvm2_logical_volume));
+}
+
+static int lvm2_physical_volume_create(
+		const struct lvm2_bounded_string *const pv_name,
+		const struct lvm2_dom_section *const pv_section,
+		struct lvm2_physical_volume **const out_pv)
+{
+	int err;
+	size_t i;
+	struct lvm2_physical_volume *pv = NULL;
+
+	struct lvm2_bounded_string *pv_name_dup = NULL;
+
+	struct lvm2_bounded_string *id = NULL;
+
+	struct lvm2_bounded_string *device = NULL;
+
+	lvm2_bool status_defined = LVM2_FALSE;
+	lvm2_physical_volume_status status = 0;
+
+	lvm2_bool flags_defined = LVM2_FALSE;
+	lvm2_physical_volume_flags flags = 0;
+
+	lvm2_bool dev_size_defined = LVM2_FALSE;
+	u64 dev_size = 0;
+
+	lvm2_bool pe_start_defined = LVM2_FALSE;
+	u64 pe_start = 0;
+
+	lvm2_bool pe_count_defined = LVM2_FALSE;
+	u64 pe_count = 0;
+
+	for(i = 0; i < pv_section->children_len; ++i) {
+		const struct lvm2_dom_obj *const cur_obj =
+			pv_section->children[i];
+		const struct lvm2_bounded_string *const name = cur_obj->name;
+
+		if(cur_obj->type == LVM2_DOM_TYPE_VALUE) {
+			const struct lvm2_dom_value *const value =
+				(struct lvm2_dom_value*) cur_obj;
+
+			if(!strncmp(name->content, "id", name->length)) {
+				if(id) {
+					LogError("Duplicate definition of "
+						"'id'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&id);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "device", name->length))
+			{
+				if(device) {
+					LogError("Duplicate definition of "
+						"'device'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&device);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "dev_size",
+				name->length))
+			{
+				if(dev_size_defined) {
+					LogError("Duplicate definition of "
+						"'dev_size'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&dev_size);
+				if(err)
+					break;
+
+				dev_size_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "pe_start",
+				name->length))
+			{
+				if(pe_start_defined) {
+					LogError("Duplicate definition of "
+						"'pe_start'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&pe_start);
+				if(err)
+					break;
+
+				pe_start_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "pe_count",
+				name->length))
+			{
+				if(pe_count_defined) {
+					LogError("Duplicate definition of "
+						"'pe_count'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&pe_count);
+				if(err)
+					break;
+
+				pe_count_defined = LVM2_TRUE;
+			}
+			else {
+				LogError("Unrecognized value-type member in "
+					"volume group: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(cur_obj->type == LVM2_DOM_TYPE_ARRAY) {
+			const struct lvm2_dom_array *const array =
+				(struct lvm2_dom_array*) cur_obj;
+
+			if(!strncmp(name->content, "status", name->length)) {
+				size_t j;
+
+				if(status_defined) {
+					LogError("Duplicate definition of "
+						"'status'.");
+					err = EINVAL;
+					break;
+				}
+
+				status = 0;
+				for(j = 0; j < array->elements_len; ++j) {
+					char *value = array->elements[j]->
+						value->content;
+					int value_len = array->elements[j]->
+						value->length;
+
+					if(!strncmp("ALLOCATABLE", value,
+						value_len))
+					{
+						status |= LVM2_PHYSICAL_VOLUME_STATUS_ALLOCATABLE;
+					}
+					else {
+						LogError("Unrecognized value "
+							"in 'status' array: "
+							"'%.*s'",
+							value_len, value);
+						err = EINVAL;
+						break;
+					}
+				}
+
+				if(err)
+					break;
+
+				status_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "flags", name->length))
+			{
+				size_t j;
+
+				if(flags_defined) {
+					LogError("Duplicate definition of "
+						"'flags'.");
+					err = EINVAL;
+					break;
+				}
+
+				flags = 0;
+
+				for(j = 0; j < array->elements_len; ++j) {
+					char *value = array->elements[j]->
+						value->content;
+					int value_len = array->elements[j]->
+						value->length;
+
+					if(0) {
+						/* Currently we don't have any
+						 * known values for 'flags'.
+						 * Read the LVM2 source. */
+					}
+					else {
+						LogError("Unrecognized value "
+							"in 'flags' array: "
+							"'%.*s'",
+							value_len, value);
+						err = EINVAL;
+						break;
+					}
+				}
+
+				if(err)
+					break;
+
+				flags_defined = LVM2_TRUE;
+			}
+			else {
+				LogError("Unrecognized array-type member in "
+					"volume group: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(cur_obj->type == LVM2_DOM_TYPE_SECTION) {
+			LogError("No section-type objects expected in "
+				"lvm2_physical_volume.");
+			err = EINVAL;
+			break;
+		}
+		else {
+			LogError("Unrecognized child type: %d", cur_obj->type);
+			err = EINVAL;
+			break;
+		}
+	}
+
+	if(!err) {
+		err = lvm2_bounded_string_dup(pv_name, &pv_name_dup);
+		if(err) {
+			LogError("Error while duplicating string: %d", err);
+		}
+	}
+
+	if(!err) {
+		if(!pv_name_dup ||
+			!id ||
+			!device ||
+			!status_defined ||
+			!flags_defined ||
+			!dev_size_defined ||
+			!pe_start_defined ||
+			!pe_count_defined)
+		{
+			LogError("Missing members in lvm2_physical_volume.");
+			err = EINVAL;
+		}
+	}
+
+	if(!err) {
+		err = lvm2_malloc(sizeof(struct lvm2_physical_volume),
+			(void**) &pv);
+		if(err) {
+			LogError("Error while allocating memory for struct "
+				"lvm2_physical_volume: %d",
+				err);
+		}
+		else
+			memset(pv, 0, sizeof(struct lvm2_physical_volume));
+	}
+
+	if(!err) {
+		pv->name = pv_name_dup;
+		pv->id = id;
+		pv->device = device;
+		pv->status = status;
+		pv->flags = flags;
+		pv->dev_size = dev_size;
+		pv->pe_start = pe_start;
+		pv->pe_count = pe_count;
+
+		*out_pv = pv;
+	}
+	else {
+		if(pv)
+			lvm2_free((void**) &pv,
+				sizeof(struct lvm2_physical_volume));
+		if(pv_name_dup)
+			lvm2_bounded_string_destroy(&pv_name_dup);
+		if(device)
+			lvm2_bounded_string_destroy(&device);
+		if(id)
+			lvm2_bounded_string_destroy(&id);
+	}
+
+	return err;
+}
+
+static void lvm2_physical_volume_destroy(struct lvm2_physical_volume **pv)
+{
+	lvm2_bounded_string_destroy(&(*pv)->name);
+	lvm2_bounded_string_destroy(&(*pv)->device);
+	lvm2_bounded_string_destroy(&(*pv)->id);
+
+	lvm2_free((void**) pv, sizeof(struct lvm2_physical_volume));
+}
+
+static int lvm2_volume_group_create(
+		const struct lvm2_dom_section *const vg_section,
+		struct lvm2_volume_group **const out_vg)
+{
+	int err;
+	size_t i;
+	struct lvm2_volume_group *vg = NULL;
+
+	struct lvm2_bounded_string *id = NULL;
+
+	lvm2_bool seqno_defined = LVM2_FALSE;
+	u64 seqno = 0;
+
+	lvm2_bool status_defined = LVM2_FALSE;
+	lvm2_volume_group_status status = 0;
+
+	lvm2_bool flags_defined = LVM2_FALSE;
+	lvm2_volume_group_flags flags = 0;
+
+	lvm2_bool extent_size_defined = LVM2_FALSE;
+	u64 extent_size = 0;
+
+	lvm2_bool max_lv_defined = LVM2_FALSE;
+	u64 max_lv = 0;
+
+	lvm2_bool max_pv_defined = LVM2_FALSE;
+	u64 max_pv = 0;
+
+	lvm2_bool metadata_copies_defined = LVM2_FALSE;
+	u64 metadata_copies = 0;
+
+	size_t physical_volumes_len = 0;
+	struct lvm2_physical_volume **physical_volumes = NULL;
+
+	size_t logical_volumes_len = 0;
+	struct lvm2_logical_volume **logical_volumes = NULL;
+
+	for(i = 0; i < vg_section->children_len; ++i) {
+		const struct lvm2_dom_obj *const cur_obj =
+			vg_section->children[i];
+		const lvm2_dom_type type = cur_obj->type;
+		const struct lvm2_bounded_string *const name = cur_obj->name;
+
+		if(type == LVM2_DOM_TYPE_VALUE) {
+			const struct lvm2_dom_value *const value =
+				(struct lvm2_dom_value*) cur_obj;
+
+			if(!strncmp(name->content, "id", name->length)) {
+				if(id) {
+					LogError("Duplicate definition of "
+						"'id'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&id);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "seqno", name->length))
+			{
+				if(seqno_defined) {
+					LogError("Duplicate definition of "
+						"'seqno'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&seqno);
+				if(err)
+					break;
+
+				seqno_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "extent_size",
+				name->length))
+			{
+				if(extent_size_defined) {
+					LogError("Duplicate definition of "
+						"'extent_size'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&extent_size);
+				if(err)
+					break;
+
+				extent_size_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "max_lv", name->length))
+			{
+				if(max_lv_defined) {
+					LogError("Duplicate definition of "
+						"'max_lv'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&max_lv);
+				if(err)
+					break;
+
+				max_lv_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "max_pv", name->length))
+			{
+				if(max_pv_defined) {
+					LogError("Duplicate definition of "
+						"'max_pv'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&max_pv);
+				if(err)
+					break;
+
+				max_pv_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "metadata_copies",
+					name->length))
+			{
+				if(metadata_copies_defined) {
+					LogError("Duplicate definition of "
+						"'metadata_copies'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&metadata_copies);
+				if(err)
+					break;
+
+				metadata_copies_defined = LVM2_TRUE;
+			}
+			else {
+				LogError("Unrecognized value-type member in "
+					"volume group: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(type == LVM2_DOM_TYPE_ARRAY) {
+			const struct lvm2_dom_array *const array =
+				(struct lvm2_dom_array*) cur_obj;
+
+			if(!strncmp(name->content, "status", name->length)) {
+				size_t j;
+
+				if(status_defined) {
+					LogError("Duplicate definition of "
+						"'status'.");
+					err = EINVAL;
+					break;
+				}
+
+				status = 0;
+				for(j = 0; j < array->elements_len; ++j) {
+					char *value = array->elements[j]->
+						value->content;
+					int value_len = array->elements[j]->
+						value->length;
+
+					if(!strncmp("RESIZEABLE", value,
+						value_len))
+					{
+						status |= LVM2_VOLUME_GROUP_STATUS_RESIZEABLE;
+					}
+					else if(!strncmp("READ", value,
+						value_len))
+					{
+						status |= LVM2_VOLUME_GROUP_STATUS_READ;
+					}
+					else if(!strncmp("WRITE", value,
+						value_len))
+					{
+						status |= LVM2_VOLUME_GROUP_STATUS_WRITE;
+					}
+					else {
+						LogError("Unrecognized value "
+							"in 'status' array: "
+							"'%.*s'",
+							value_len, value);
+						err = EINVAL;
+						break;
+					}
+				}
+
+				if(err)
+					break;
+
+				status_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "flags", name->length))
+			{
+				size_t j;
+
+				if(flags_defined) {
+					LogError("Duplicate definition of "
+						"'flags'.");
+					err = EINVAL;
+					break;
+				}
+
+				flags = 0;
+
+				for(j = 0; j < array->elements_len; ++j) {
+					char *value = array->elements[j]->
+						value->content;
+					int value_len = array->elements[j]->
+						value->length;
+
+					if(0) {
+						/* Currently we don't have any
+						 * known values for 'flags'.
+						 * Read the LVM2 source. */
+					}
+					else {
+						LogError("Unrecognized value "
+							"in 'flags' array: "
+							"'%.*s'",
+							value_len, value);
+						err = EINVAL;
+						break;
+					}
+				}
+
+				if(err)
+					break;
+
+				flags_defined = LVM2_TRUE;
+			}
+			else {
+				LogError("Unrecognized array-type member in "
+					"volume group: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(type == LVM2_DOM_TYPE_SECTION) {
+			struct lvm2_dom_section *const section =
+				(struct lvm2_dom_section*) cur_obj;
+
+			if(!strncmp(name->content, "physical_volumes",
+				name->length))
+			{
+				size_t j;
+
+				if(physical_volumes) {
+					LogError("Duplicate definition of "
+						"'physical_volumes'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_malloc(section->children_len *
+					sizeof(struct lvm2_physical_volume*),
+					(void**) &physical_volumes);
+				if(err)
+					break;
+
+				physical_volumes_len = section->children_len;
+				memset(physical_volumes, 0,
+					physical_volumes_len *
+					sizeof(struct lvm2_physical_volume*));
+
+				for(j = 0; j < section->children_len; ++j) {
+					struct lvm2_dom_obj *grandchild_obj =
+						section->children[j];
+
+					if(grandchild_obj->type !=
+						LVM2_DOM_TYPE_SECTION)
+					{
+						LogError("Non-section type "
+							"member in "
+							"'physical_volumes' "
+							"section.");
+						err = EINVAL;
+						break;
+					}
+
+					err = lvm2_physical_volume_create(
+						grandchild_obj->name,
+						(struct lvm2_dom_section*)
+						grandchild_obj,
+						&physical_volumes[j]);
+					if(err) {
+						LogError("Error while creating "
+							"lvm2_physical_volume: "
+							"%d", err);
+						err = EINVAL;
+						break;
+					}
+				}
+
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "logical_volumes",
+				name->length))
+			{
+				size_t j;
+
+				if(logical_volumes) {
+					LogError("Duplicate definition of "
+						"'logical_volumes'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_malloc(section->children_len *
+					sizeof(struct lvm2_logical_volume*),
+					(void**) &logical_volumes);
+				if(err)
+					break;
+
+				logical_volumes_len = section->children_len;
+				memset(logical_volumes, 0,
+					logical_volumes_len *
+					sizeof(struct lvm2_logical_volume*));
+
+				for(j = 0; j < section->children_len; ++j) {
+					struct lvm2_dom_obj *grandchild_obj =
+						section->children[j];
+
+					if(grandchild_obj->type !=
+						LVM2_DOM_TYPE_SECTION)
+					{
+						LogError("Non-section type "
+							"member in "
+							"'logical_volumes' "
+							"section.");
+						err = EINVAL;
+						break;
+					}
+
+					err = lvm2_logical_volume_create(
+						grandchild_obj->name,
+						(struct lvm2_dom_section*)
+						grandchild_obj,
+						&logical_volumes[j]);
+					if(err) {
+						LogError("Error while creating "
+							"lvm2_logical_volume: "
+							"%d", err);
+						err = EINVAL;
+						break;
+					}
+				}
+
+				if(err)
+					break;
+			}
+			else {
+				LogError("Unrecognized section-type member in "
+					"volume group: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else {
+			LogError("Unrecognized child type: %d", type);
+			err = EINVAL;
+			break;
+		}
+	}
+
+	if(!err) {
+		if(!id) {
+			LogError("Missing member 'id' in "
+				"lvm2_volume_group.");
+			err = EINVAL;
+		}
+		if(!seqno_defined) {
+			LogError("Missing member 'seqno' in "
+				"lvm2_volume_group.");
+			err = EINVAL;
+		}
+		if(!status_defined) {
+			LogError("Missing member 'status' in "
+				"lvm2_volume_group.");
+			err = EINVAL;
+		}
+		if(!flags_defined) {
+			LogError("Missing member 'flags' in "
+				"lvm2_volume_group.");
+			err = EINVAL;
+		}
+		if(!extent_size_defined) {
+			LogError("Missing member 'extent_size' in "
+				"lvm2_volume_group.");
+			err = EINVAL;
+		}
+		if(!max_lv_defined) {
+			LogError("Missing member 'max_lv' in "
+				"lvm2_volume_group.");
+			err = EINVAL;
+		}
+		if(!max_pv_defined) {
+			LogError("Missing member 'max_pv' in "
+				"lvm2_volume_group.");
+			err = EINVAL;
+		}
+	}
+
+	if(!err) {
+		err = lvm2_malloc(sizeof(struct lvm2_volume_group),
+			(void**) &vg);
+		if(err) {
+			LogError("Error while allocating memory for struct "
+				"lvm2_volume_group: %d",
+				err);
+		}
+		else
+			memset(vg, 0, sizeof(struct lvm2_volume_group));
+	}
+
+	if(!err) {
+		vg->id = id;
+		vg->seqno = seqno;
+		vg->status = status;
+		vg->flags = flags;
+		vg->extent_size = extent_size;
+		vg->max_lv = max_lv;
+		vg->max_pv = max_pv;
+		if(metadata_copies_defined)
+			vg->metadata_copies = metadata_copies;
+		else
+			vg->metadata_copies = 1;
+		vg->physical_volumes_len = physical_volumes_len;
+		vg->physical_volumes = physical_volumes;
+		vg->logical_volumes_len = logical_volumes_len;
+		vg->logical_volumes = logical_volumes;
+
+		*out_vg = vg;
+	}
+	else {
+		if(vg)
+			lvm2_free((void**) &vg,
+				sizeof(struct lvm2_volume_group));
+		if(logical_volumes) {
+			for(i = 0; i < logical_volumes_len; ++i) {
+				if(logical_volumes[i])
+					lvm2_logical_volume_destroy(
+						&logical_volumes[i]);
+			}
+
+			lvm2_free((void**) &logical_volumes,
+				logical_volumes_len *
+				sizeof(struct lvm2_logical_volume*));
+		}
+		if(physical_volumes) {
+			for(i = 0; i < physical_volumes_len; ++i) {
+				if(physical_volumes[i])
+					lvm2_physical_volume_destroy(
+						&physical_volumes[i]);
+			}
+
+			lvm2_free((void**) &physical_volumes,
+				physical_volumes_len *
+				sizeof(struct lvm2_physical_volume*));
+		}
+		if(id)
+			lvm2_bounded_string_destroy(&id);
+	}
+
+	return err;
+}
+
+static void lvm2_volume_group_destroy(struct lvm2_volume_group **vg)
+{
+	if((*vg)->logical_volumes) {
+		size_t i;
+
+		for(i = 0; i < (*vg)->logical_volumes_len; ++i) {
+			lvm2_logical_volume_destroy(
+				&(*vg)->logical_volumes[i]);
+		}
+
+		lvm2_free((void**) &(*vg)->logical_volumes,
+			(*vg)->logical_volumes_len *
+			sizeof(struct lvm2_logical_volume*));
 		
+	}
+
+	if((*vg)->physical_volumes) {
+		size_t i;
+
+		for(i = 0; i < (*vg)->physical_volumes_len; ++i) {
+			lvm2_physical_volume_destroy(
+				&(*vg)->physical_volumes[i]);
+		}
+
+		lvm2_free((void**) &(*vg)->physical_volumes,
+			(*vg)->physical_volumes_len *
+			sizeof(struct lvm2_physical_volume*));
+	}
+
+	lvm2_bounded_string_destroy(&(*vg)->id);
+
+	lvm2_free((void**) vg, sizeof(struct lvm2_volume_group));
+}
+
 LVM2_TEXT_EXPORT int lvm2_layout_create(
 		const struct lvm2_dom_section *const root_section,
 		struct lvm2_layout **const out_layout)
 {
 	int err = 0;
 	size_t i;
-	const char *path_2l[3];
-	const struct lvm2_dom_obj *cur_obj = NULL;
 
-	const struct lvm2_bounded_string *vg_name = NULL;
-	const struct lvm2_dom_section *physical_volumes = NULL;
-	const struct lvm2_dom_section *logical_volumes = NULL;
+	struct lvm2_bounded_string *vg_name = NULL;
+	struct lvm2_volume_group *vg = NULL;
 
-	err = lvm2_malloc(sizeof(struct lvm2_layout), )
+	struct lvm2_bounded_string *contents = NULL;
+
+	lvm2_bool version_defined = LVM2_FALSE;
+	u64 version = 0;
+
+	struct lvm2_bounded_string *description = NULL;
+
+	struct lvm2_bounded_string *creation_host = NULL;
+
+	lvm2_bool creation_time_defined = LVM2_FALSE;
+	u64 creation_time = 0;
+
+	struct lvm2_layout *layout = NULL;
 
 	/* Search for vg_name candidates. */
 	for(i = 0; i < root_section->children_len; ++i) {
 		const struct lvm2_dom_obj *child = root_section->children[i];
-		if(child->type == LVM2_DOM_TYPE_SECTION) {
-			if(vg_name) {
+		const struct lvm2_bounded_string *const name = child->name;
+
+		if(child->type == LVM2_DOM_TYPE_VALUE) {
+			const struct lvm2_dom_value *const value =
+				(struct lvm2_dom_value*) child;
+
+			if(!strncmp(name->content, "contents", name->length)) {
+				if(contents) {
+					LogError("Duplicate definition of "
+						"'contents'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&contents);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "version", name->length))
+			{
+				if(version_defined) {
+					LogError("Duplicate definition of "
+						"'version'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&version);
+				if(err)
+					break;
+
+				version_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "description",
+				name->length))
+			{
+				if(description) {
+					LogError("Duplicate definition of "
+						"'description'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&description);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "creation_host",
+				name->length))
+			{
+				if(creation_host) {
+					LogError("Duplicate definition of "
+						"'creation_host'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&creation_host);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "creation_time",
+				name->length))
+			{
+				if(creation_time_defined) {
+					LogError("Duplicate definition of "
+						"'creation_time'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&creation_time);
+				if(err)
+					break;
+
+				creation_time_defined = LVM2_TRUE;
+			}
+			else {
+				LogError("Unrecognized value-type member in "
+					"root section: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+			
+		}
+		else if(child->type == LVM2_DOM_TYPE_ARRAY) {
+			if(0) {
+				/* No known arrays in root section. */
+			}
+			else {
+				LogError("Unrecognized array-type member in "
+					"root section: '%.*s'",
+					name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+		}
+		else if(child->type == LVM2_DOM_TYPE_SECTION) {
+			struct lvm2_bounded_string *dup_vg_name = NULL;
+
+			if(vg_name || vg) {
 				LogError("More than one sub-section in root. "
 					"Cannot determine which is the volume "
 					"group.");
-				return EINVAL;
+				err = EINVAL;
+				break;
 			}
 
-			vg_name = child->name;
+			err = lvm2_bounded_string_dup(child->name,
+				&dup_vg_name);
+			if(err)
+				break;
+
+			err = lvm2_volume_group_create(
+				(struct lvm2_dom_section*) child, &vg);
+			if(err) {
+				lvm2_bounded_string_destroy(&dup_vg_name);
+				break;
+			}
+
+			vg_name = dup_vg_name;
+
+		}
+		else {
+			LogError("Unrecognized child type: %d", child->type);
+			err = EINVAL;
+			break;
 		}
 	}
 
-	{
-		path_2l[0] = vg_name->content;
-		path_2l[1] = "id";
-		path_2l[2] = NULL;
-
-		cur_obj = lvm2_dom_tree_lookup(root_section, path_2l);
-		if(!cur_obj) {
-			LogError("Could not find 'id' section.");
-			return ENOENT;
+	if(!err) {
+		if(!vg_name ||
+			!vg ||
+			!contents ||
+			!version_defined ||
+			!description ||
+			!creation_host ||
+			!creation_time_defined)
+		{
+			LogError("Missing members in lvm2_layout.");
+			err = EINVAL;
 		}
-		else if(cur_obj->type != LVM2_DOM_TYPE_VALUE) {
-			LogError("Non-section type: 'id'");
-			return ENOENT;
-		}
-
-		id = (struct lvm2_dom_value*) cur_obj;
 	}
 
-	{
-		path_2l[0] = vg_name->content;
-		path_2l[1] = "physical_volumes";
-		path_2l[2] = NULL;
-
-		cur_obj = lvm2_dom_tree_lookup(root_section, path_2l);
-		if(!cur_obj) {
-			LogError("Could not find 'physical_volumes' section.");
-			return ENOENT;
+	if(!err) {
+		err = lvm2_malloc(sizeof(struct lvm2_layout), (void**) &layout);
+		if(err) {
+			LogError("Error while allocating memory for struct "
+				"lvm2_layout: %d", err);
 		}
-		else if(cur_obj->type != LVM2_DOM_TYPE_SECTION) {
-			LogError("Non-section type: 'physical_volumes'");
-			return ENOENT;
-		}
+		else {
+			memset(layout, 0, sizeof(struct lvm2_layout));
 
-		physical_volumes = (struct lvm2_dom_section*) cur_obj;
+			layout->vg_name = vg_name;
+			layout->vg = vg;
+			layout->contents = contents;
+			layout->version = version;
+			layout->description = description;
+			layout->creation_host = creation_host;
+			layout->creation_time = creation_time;			
+		}
 	}
 
-	
-
-	{
-		path_2l[0] = vg_name->content;
-		path_2l[1] = "logical_volumes";
-		path_2l[2] = NULL;
-
-		cur_obj = lvm2_dom_tree_lookup(root_section, path_2l);
-		if(!cur_obj) {
-			LogError("Could not find 'logical_volumes' section.");
-			return ENOENT;
-		}
-		else if(cur_obj->type != LVM2_DOM_TYPE_SECTION) {
-			LogError("Non-section type: 'logical_volumes'");
-			return ENOENT;
-		}
-
-		logical_volumes = (struct lvm2_dom_section*) cur_obj;
+	if(err) {
+		if(layout)
+			lvm2_free((void**) &layout, sizeof(struct lvm2_layout));
+		if(creation_host)
+			lvm2_bounded_string_destroy(&creation_host);
+		if(description)
+			lvm2_bounded_string_destroy(&description);
+		if(contents)
+			lvm2_bounded_string_destroy(&contents);
+		if(vg)
+			lvm2_volume_group_destroy(&vg);
+		if(vg_name)
+			lvm2_bounded_string_destroy(&vg_name);
 	}
+	else
+		*out_layout = layout;	
 
 	return err;
 }
 
 LVM2_TEXT_EXPORT void lvm2_layout_destroy(
-		struct lvm2_layout **parsed_text);
-
-LVM2_TEXT_EXPORT void lvm2_layout_destroy(
-		struct lvm2_layout **const parsed_text)
+		struct lvm2_layout **const layout)
 {
-	if((*parsed_text)->vg)
-		lvm2_volume_group_destroy(&(*parsed_text)->vg);
-	/*if(parsed_text->contents)
-		IOFree(&parsed_text->contents, parsed_text->contents_size);*/
+	lvm2_bounded_string_destroy(&(*layout)->creation_host);
+	lvm2_bounded_string_destroy(&(*layout)->description);
+	lvm2_bounded_string_destroy(&(*layout)->contents);
 
-	lvm2_free((void**) parsed_text, sizeof(struct lvm2_layout));
+	lvm2_volume_group_destroy(&(*layout)->vg);
+	lvm2_bounded_string_destroy(&(*layout)->vg_name);
+
+	lvm2_free((void**) layout, sizeof(struct lvm2_layout));
 }

@@ -72,7 +72,9 @@ protected:
 	virtual IOMedia* instantiateMediaObject(
 		int partitionNumber,
 		UInt64 formattedLVMSize,
-		const disk_locn *partition);
+		const char *partitionName,
+		UInt64 partitionBase,
+		UInt64 partitionSize);
 
 	/*
 	 * Allocate a new media object (called from instantiateMediaObject).

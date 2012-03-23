@@ -32,6 +32,109 @@
 /* Defined in lvm2_osal_unix.c. */
 long long lvm2_get_allocations(void);
 
+#define emit(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while(0)
+
+static void print_lvm2_stripe(struct lvm2_stripe *stripe)
+{
+	emit("\t\t\t\tpv_name: %s", stripe->pv_name->content);
+	emit("\t\t\t\textent_start: %" FMTllu, ARGllu(stripe->extent_start));
+}
+
+static void print_lvm2_segment(struct lvm2_segment *segment)
+{
+	emit("\t\t\tstart_extent: %" FMTllu, ARGllu(segment->start_extent));
+	emit("\t\t\textent_count: %" FMTllu, ARGllu(segment->extent_count));
+	emit("\t\t\ttype: %s", segment->type->content);
+	emit("\t\t\tstripe_count: %" FMTllu, ARGllu(segment->stripe_count));
+
+	if(segment->stripes_len) {
+		size_t i;
+
+		for(i = 0; i < segment->stripes_len; ++i) {
+			emit("\t\t\tstripes[%" FMTzu "]:",
+				ARGzu(i));
+			print_lvm2_stripe(segment->stripes[i]);
+		}
+	}
+}
+
+static void print_lvm2_logical_volume(struct lvm2_logical_volume *lv)
+{
+	emit("\t\tname: %s", lv->name->content);
+	emit("\t\tid: %s", lv->id->content);
+	emit("\t\tstatus: 0x%X", lv->status);
+	emit("\t\tflags: 0x%X", lv->flags);
+	emit("\t\tsegment_count: %" FMTllu, ARGllu(lv->segment_count));
+
+	if(lv->segments_len) {
+		size_t i;
+
+		for(i = 0; i < lv->segments_len; ++i) {
+			emit("\t\tsegments[%" FMTzu "]:",
+				ARGzu(i));
+			print_lvm2_segment(lv->segments[i]);
+		}
+	}
+}
+
+static void print_lvm2_physical_volume(struct lvm2_physical_volume *pv)
+{
+	emit("\t\tname: %s", pv->name->content);
+	emit("\t\tid: %s", pv->id->content);
+	emit("\t\tdevice: %s", pv->device->content);
+	emit("\t\tstatus: 0x%X", pv->status);
+	emit("\t\tflags: 0x%X", pv->flags);
+	emit("\t\tdev_size: %" FMTllu, ARGllu(pv->dev_size));
+	emit("\t\tpe_start: %" FMTllu, ARGllu(pv->pe_start));
+	emit("\t\tpe_count: %" FMTllu, ARGllu(pv->pe_count));
+}
+
+static void print_lvm2_volume_group(struct lvm2_volume_group *vg)
+{
+
+	emit("\tid: %s", vg->id ? vg->id->content : "NULL");
+	emit("\tseqno: %" FMTllu, ARGllu(vg->seqno));
+	emit("\tstatus: 0x%" FMTllX, ARGllX(vg->status));
+	emit("\tflags: 0x%" FMTllX, ARGllX(vg->flags));
+	emit("\textent_size: %" FMTllu, ARGllu(vg->extent_size));
+	emit("\tmax_lv: %" FMTllu, ARGllu(vg->max_lv));
+	emit("\tmax_pv: %" FMTllu, ARGllu(vg->max_pv));
+	emit("\tmetadata_copies: %" FMTllu, ARGllu(vg->metadata_copies));
+
+	if(vg->physical_volumes_len) {
+		size_t i;
+
+		for(i = 0; i < vg->physical_volumes_len; ++i) {
+			emit("\tphysical_volumes[%" FMTzu "]:",
+				ARGzu(i));
+			print_lvm2_physical_volume(vg->physical_volumes[i]);
+		}
+	}
+	if(vg->logical_volumes_len) {
+		size_t i;
+
+		for(i = 0; i < vg->logical_volumes_len; ++i) {
+			emit("\tlogical_volumes[%" FMTzu "]:",
+				ARGzu(i));
+			print_lvm2_logical_volume(vg->logical_volumes[i]);
+		}
+	}
+}
+
+static void print_lvm2_layout(struct lvm2_layout *layout)
+{
+	emit("vg_name: %s", layout->vg_name->content);
+	emit("vg:");
+	print_lvm2_volume_group(layout->vg);
+	emit("contents: %s", layout->contents->content);
+	emit("version: %" FMTllu, ARGllu(layout->version));
+	emit("description: %s", layout->description->content);
+	emit("creation_host: %s", layout->creation_host->content);
+	emit("creation_time: %" FMTllu, ARGllu(layout->creation_time));
+}
+
+#undef emit
+
 int main(int argc, char **argv) {
 	int ret = (EXIT_FAILURE);
 	int fd;
@@ -91,8 +194,40 @@ int main(int argc, char **argv) {
 					if(lvm2_parse_text(file_data, file_size,
 						&result))
 					{
-						lvm2_dom_section_destroy(
-							&result, LVM2_TRUE);
+						int err;
+						struct lvm2_layout *layout;
+						if(!(err = lvm2_layout_create(
+							result, &layout)))
+						{
+							lvm2_dom_section_destroy(
+								&result, LVM2_TRUE);
+
+							fprintf(stderr, "lvm2_"
+								"layout_create "
+								"returned "
+								"successfully."
+								"\n");
+							print_lvm2_layout(
+								layout);
+
+							lvm2_layout_destroy(
+								&layout);
+						}
+						else {
+							lvm2_dom_section_destroy(
+								&result, LVM2_TRUE);
+
+							fprintf(stderr, "lvm2_"
+								"layout_create "
+								"returned "
+								"with error: %d"
+								"\n", err);
+						}
+					}
+					else {
+						fprintf(stderr,
+							"lvm2_parse_text "
+							"returned with error.");
 					}
 				}
 

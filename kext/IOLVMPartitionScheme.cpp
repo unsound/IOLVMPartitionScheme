@@ -169,7 +169,8 @@ IOReturn IOLVMPartitionScheme::requestProbe(IOOptionBits options)
 	OSSet *partitionsNew;
 	SInt32 score = 0;
 
-	LogDebug("%s: Entering with options=0x%08lX.", __FUNCTION__, options);
+	LogDebug("%s: Entering with options=0x%08" FMTlX ".",
+		__FUNCTION__, ARGlX(options));
 
 	/* Scan for an LVM layout. */
 	partitionsNew = scan(&score);
@@ -196,7 +197,8 @@ IOReturn IOLVMPartitionScheme::requestProbe(IOOptionBits options)
 
 static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
 		const UInt64 metadataOffset, const UInt64 metadataSize,
-		const raw_locn *const locn)
+		const raw_locn *const locn,
+		struct lvm2_layout **const outLayout)
 {
 	const UInt64 mediaBlockSize = media->getPreferredBlockSize();
 
@@ -216,6 +218,9 @@ static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
 
 	char *text;
 	size_t textLen;
+
+	struct lvm2_dom_section *parseResult;
+	struct lvm2_layout *layout;
 
 	LogDebug("metadataOffset = %" FMTllu, ARGllu(metadataOffset));
 	LogDebug("metadataSize = %" FMTllu, ARGllu(metadataSize));
@@ -279,13 +284,30 @@ static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
 
 	//LogDebug("LVM2 text: %.*s", textLen, text);
 
-	struct lvm2_dom_section *result;
-	if(lvm2_parse_text(text, textLen, &result)) {
-		lvm2_dom_section_destroy(&result, LVM2_TRUE);
+	if(!lvm2_parse_text(text, textLen, &parseResult)) {
+		LogError("Error while parsing text.");
+		goto errOut;
 	}
+
+	{
+		int err;
+
+		err = lvm2_layout_create(parseResult, &layout);
+		if(err) {
+			LogError("Error while converting parsed result into "
+				"structured data: %d", err);
+			goto errOut;
+		}
+	}
+
+	lvm2_dom_section_destroy(&parseResult, LVM2_TRUE);
+
+	*outLayout = layout;
 
 	res = true;
 cleanup:
+	if(parseResult)
+		lvm2_dom_section_destroy(&parseResult, LVM2_TRUE);
 	if(textBuffer)
 		textBuffer->release();
 
@@ -300,7 +322,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 	IOBufferMemoryDescriptor *secondaryBuffer = NULL;
 	UInt64 bufferReadAt = 0;
 	vm_size_t bufferSize = 0;
-	UInt32 secondaryBufferSize = 0;
+	size_t secondaryBufferSize = 0;
 	IOMedia *media = getProvider();
 	UInt64 mediaBlockSize = media->getPreferredBlockSize();
 	bool mediaIsOpen = false;
@@ -461,6 +483,8 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		size_t dataAreasLength;
 		size_t metadataAreasLength;
 
+		struct lvm2_layout *layout = NULL;
+
 		bufferReadAt = firstLabel * LVM_SECTOR_SIZE;
 
 		status = media->read(this, bufferReadAt, buffer);
@@ -619,6 +643,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			UInt64 mda_size;
 
 			UInt32 mda_calculated_checksum;
+			int partitionNumber = 0;
 
 			if(disk_areas_idx >= dataAreasLength) {
 				LogError("Overflow when iterating through disk "
@@ -755,8 +780,155 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 				continue;
 			}
 
-			readLVM2Text(media, this, meta_offset, meta_size,
-				&mdaHeader->raw_locns[0]);
+			if(!readLVM2Text(media, this, meta_offset, meta_size,
+				&mdaHeader->raw_locns[0], &layout))
+			{
+				LogDebug("Error while reading LVM2 text.");
+				continue;
+			}
+
+			LogDebug("Successfully read LVM2 text.");
+
+			{
+				size_t j;
+				const struct lvm2_physical_volume *match = NULL;
+
+				for(j = 0; j < layout->vg->physical_volumes_len;
+					++j)
+				{
+					const char *const our_uuid =
+						(char*) pvHeader->pv_uuid;
+					const struct lvm2_physical_volume *const
+						pv =
+						layout->vg->physical_volumes[j];
+
+					if(pv->id->length != 38) {
+						LogError("Invalid id length %d",
+							pv->id->length);
+						continue;
+					}
+
+					if(!strncmp(&pv->id->content[0],
+						&our_uuid[0], 6) &&
+						pv->id->content[6] == '-' &&
+						!strncmp(&pv->id->content[7],
+						&our_uuid[6], 4) &&
+						pv->id->content[11] == '-' &&
+						!strncmp(&pv->id->content[12],
+						&our_uuid[10], 4) &&
+						pv->id->content[16] == '-' &&
+						!strncmp(&pv->id->content[17],
+						&our_uuid[14], 4) &&
+						pv->id->content[21] == '-' &&
+						!strncmp(&pv->id->content[22],
+						&our_uuid[18], 4) &&
+						pv->id->content[26] == '-' &&
+						!strncmp(&pv->id->content[27],
+						&our_uuid[22], 4) &&
+						pv->id->content[31] == '-' &&
+						!strncmp(&pv->id->content[32],
+						&our_uuid[26], 6))
+					{
+						LogDebug("Found physical "
+							"volume: '%.*s'",
+							pv->name->length,
+							pv->name->content);
+						match = pv;
+						break;
+					}
+				}
+
+				if(!match) {
+					LogError("No physical volume match "
+						"found in LVM2 database.");
+				}
+				else for(j = 0;
+					j < layout->vg->logical_volumes_len;
+					++j)
+				{
+					const struct lvm2_logical_volume *const
+						lv =
+						layout->vg->logical_volumes[j];
+					const struct lvm2_bounded_string
+						*pv_name;
+						
+					UInt64 partitionStart;
+					UInt64 partitionLength;
+					IOMedia *newMedia;
+
+					if(lv->segment_count != 1) {
+						LogError("More than one "
+							"segment is "
+							"unsupported.");
+						continue;
+					}
+
+					if(lv->segments[0]->stripes_len != 1) {
+						LogError("More than one stripe "
+							"is unsupported.");
+						continue;
+					}
+
+					pv_name = lv->segments[0]->stripes[0]->
+						pv_name;
+
+					if(pv_name->length !=
+						match->name->length ||
+						strncmp(pv_name->content,
+						match->name->content,
+						pv_name->length) != 0)
+					{
+						LogError("Physical volume name "
+							"mismatch: \"%.*s\" != "
+							"\"%.*s\"",
+							pv_name->length,
+							pv_name->content,
+							match->name->length,
+							match->name->content);
+						continue;
+					}
+
+					partitionStart = (match->pe_start +
+						lv->segments[0]->stripes[0]->
+						extent_start *
+						layout->vg->extent_size) *
+						mediaBlockSize /* 512? */;
+					LogDebug("partitionStart: %" FMTllu,
+						ARGllu(partitionStart));
+
+					partitionLength =
+						lv->segments[0]->extent_count *
+						layout->vg->extent_size *
+						mediaBlockSize /* 512? */;
+
+					LogDebug("partitionLength: %" FMTllu,
+						ARGllu(partitionLength));
+
+					/* TODO: Check that partition is inside
+					 * device bounds, doesn't overlap other
+					 * partitions, ... */
+					newMedia = instantiateMediaObject(
+						partitionNumber++,
+						deviceSize,
+						lv->name->content,
+						partitionStart,
+						partitionLength);
+					if(newMedia) {
+						LogDebug("Instantiated media "
+							"object.");
+						partitions->setObject(newMedia);
+						newMedia->release();
+					}
+					else {
+						LogError("Error while creating "
+							"IOMedia object.");
+						continue;
+					}
+				}
+
+				lvm2_layout_destroy(&layout);
+			}
+
 
 #if 0
 			if(disk_areas_idx > INT_MAX) {
@@ -783,8 +955,6 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		}
 	}
 
-	goto scanErr;
-
 	// Release our resources.
 
 	close(this);
@@ -805,13 +975,15 @@ scanErr:
 	if(buffer)
 		buffer->release();
 
-	return 0;
+	return NULL;
 }
 
 IOMedia* IOLVMPartitionScheme::instantiateMediaObject(
 		const int partitionNumber,
 		const UInt64 formattedLVMSize,
-		const disk_locn *const partition)
+		const char *partitionName,
+		const UInt64 partitionBase,
+		UInt64 partitionSize)
 {
 	//
 	// Instantiate a new media object to represent the given partition.
@@ -819,23 +991,11 @@ IOMedia* IOLVMPartitionScheme::instantiateMediaObject(
 
 	IOMedia *media = getProvider();
 	UInt64 mediaBlockSize = media->getPreferredBlockSize();
-	UInt64 partitionBase = 0;
 	const char *partitionHint;
 	bool partitionIsWritable = media->isWritable();
-	const char *partitionName;
-	UInt64 partitionSize = 0;
 
-	partitionHint = "LVM_member";
-	partitionName = "";
+	partitionHint = "Linux";
 
-	// Compute the relative byte position and size of the new partition.
-
-	partitionBase = OSSwapLittleToHostInt64(partition->offset);
-	partitionSize = OSSwapLittleToHostInt64(partition->size);
-
-	if(partitionSize == 0) {
-		partitionSize = formattedLVMSize - partitionBase;
-	}
 
 	// Clip the size of the new partition if it extends past the
 	// end-of-media.
@@ -901,7 +1061,7 @@ IOMedia* IOLVMPartitionScheme::instantiateMediaObject(
 		}
 		else {
 			newMedia->release();
-			newMedia = 0;
+			newMedia = NULL;
 		}
 	}
 

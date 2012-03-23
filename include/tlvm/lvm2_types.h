@@ -52,9 +52,13 @@ typedef uint64_t u64;
 #endif /*(defined(__DARWIN__) || defined (__APPLE__)) && defined(KERNEL) */
 
 typedef int lvm2_bool;
+
 enum {
 	LVM2_FALSE = 0,
 	LVM2_TRUE = 1,
 };
+
+#define lvm2_min(a, b) ((a) < (b) ? (a) : (b))
+#define lvm2_max(a, b) ((a) > (b) ? (a) : (b))
 
 #endif /* !defined(_LIBTLVM_LVM2_TYPES_H) */
