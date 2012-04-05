@@ -19,6 +19,8 @@
 #if !defined(_LVM2_OSAL_UNIX_H)
 #define _LVM2_OSAL_UNIX_H
 
+#include "lvm2_device.h"
+
 #include <stdio.h>
 #include <stddef.h>
 
@@ -107,5 +109,8 @@
 #else
 #define LogDebug(...) do {} while(0)
 #endif /* defined(DEBUG) */
+
+int lvm2_unix_device_create(const char *name, struct lvm2_device **out_dev);
+void lvm2_unix_device_destroy(struct lvm2_device **dev);
 
 #endif /* !defined(_LVM2_OSAL_UNIX_H) */

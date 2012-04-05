@@ -19,6 +19,8 @@
 #if !defined(_LVM2_OSAL_IOKIT_H)
 #define _LVM2_OSAL_IOKIT_H
 
+#include "lvm2_device.h"
+
 #include <IOKit/IOLib.h>
 
 #define FMThhd "d"
@@ -105,5 +107,16 @@
 #else
 #define LogDebug(...) do {} while(0)
 #endif /* defined(DEBUG) */
+
+#if defined(__cplusplus)
+
+#include <IOKit/storage/IOMedia.h>
+#include <IOKit/storage/IOStorage.h>
+
+int lvm2_iokit_device_create(IOStorage *storage, IOMedia *media,
+		struct lvm2_device **out_dev);
+void lvm2_iokit_device_destroy(struct lvm2_device **dev);
+
+#endif /* defined(__cplusplus) */
 
 #endif /* !defined(_LVM2_OSAL_IOKIT_H) */
