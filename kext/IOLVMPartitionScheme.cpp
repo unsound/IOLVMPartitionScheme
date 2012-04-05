@@ -958,6 +958,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 	// Release our resources.
 
 	close(this);
+	secondaryBuffer->release();
 	buffer->release();
 
 	return partitions;
