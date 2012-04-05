@@ -51,6 +51,21 @@ typedef uint64_t u64;
 
 #endif /*(defined(__DARWIN__) || defined (__APPLE__)) && defined(KERNEL) */
 
+#define S8_MAX  0x7F
+#define S16_MAX 0x7FFF
+#define S32_MAX 0x7FFFFFFFL
+#define S64_MAX 0x7FFFFFFFLL
+
+#define S8_MIN  (-S8_MAX-1)
+#define S16_MIN (-S16_MAX-1)
+#define S32_MIN (-S32_MAX-1)
+#define S64_MIN (-S64_MAX-1)
+
+#define U8_MAX  0xFFU
+#define U16_MAX 0xFFFFU
+#define U32_MAX 0xFFFFFFFFUL
+#define U64_MAX 0xFFFFFFFFFFFFFFFFULL
+
 typedef int lvm2_bool;
 
 enum {
