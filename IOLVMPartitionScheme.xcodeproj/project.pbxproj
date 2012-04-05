@@ -6,6 +6,21 @@
 	objectVersion = 45;
 	objects = {
 
+/* Begin PBXAggregateTarget section */
+		03735EB0152D59D30074BEE6 /* All */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 03735EC7152D5A1D0074BEE6 /* Build configuration list for PBXAggregateTarget "All" */;
+			buildPhases = (
+			);
+			dependencies = (
+				03735EB6152D59E50074BEE6 /* PBXTargetDependency */,
+				03735EB8152D59E80074BEE6 /* PBXTargetDependency */,
+			);
+			name = All;
+			productName = All;
+		};
+/* End PBXAggregateTarget section */
+
 /* Begin PBXBuildFile section */
 		03735E5E152D54B10074BEE6 /* lvm2_device.h in Headers */ = {isa = PBXBuildFile; fileRef = 03735E5D152D54B10074BEE6 /* lvm2_device.h */; };
 		0373F6971519973200713D63 /* lvm2_text.h in Headers */ = {isa = PBXBuildFile; fileRef = 0373F6951519973200713D63 /* lvm2_text.h */; };
@@ -24,6 +39,23 @@
 		32D94FC80562CBF700B6AF17 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C167DFE841241C02AAC07 /* InfoPlist.strings */; };
 		32D94FCA0562CBF700B6AF17 /* IOLVMPartitionScheme.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1A224C3FFF42367911CA2CB7 /* IOLVMPartitionScheme.cpp */; settings = {ATTRIBUTES = (); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		03735EB5152D59E50074BEE6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 089C1669FE841209C02AAC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 32D94FC30562CBF700B6AF17 /* IOLVMPartitionScheme */;
+			remoteInfo = IOLVMPartitionScheme;
+		};
+		03735EB7152D59E80074BEE6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 089C1669FE841209C02AAC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0373F7431519B51900713D63 /* LVMTest */;
+			remoteInfo = LVMTest;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		03735E5D152D54B10074BEE6 /* lvm2_device.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lvm2_device.h; path = include/tlvm/lvm2_device.h; sourceTree = "<group>"; };
@@ -208,6 +240,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				03735EB0152D59D30074BEE6 /* All */,
 				32D94FC30562CBF700B6AF17 /* IOLVMPartitionScheme */,
 				0373F7431519B51900713D63 /* LVMTest */,
 			);
@@ -257,6 +290,19 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		03735EB6152D59E50074BEE6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 32D94FC30562CBF700B6AF17 /* IOLVMPartitionScheme */;
+			targetProxy = 03735EB5152D59E50074BEE6 /* PBXContainerItemProxy */;
+		};
+		03735EB8152D59E80074BEE6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0373F7431519B51900713D63 /* LVMTest */;
+			targetProxy = 03735EB7152D59E80074BEE6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		089C167DFE841241C02AAC07 /* InfoPlist.strings */ = {
@@ -417,6 +463,41 @@
 			};
 			name = Release_64;
 		};
+		03735EB1152D59D30074BEE6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				PRODUCT_NAME = All;
+			};
+			name = Debug;
+		};
+		03735EB2152D59D30074BEE6 /* Debug_64 */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = All;
+			};
+			name = Debug_64;
+		};
+		03735EB3152D59D30074BEE6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_ENABLE_FIX_AND_CONTINUE = NO;
+				PRODUCT_NAME = All;
+				ZERO_LINK = NO;
+			};
+			name = Release;
+		};
+		03735EB4152D59D30074BEE6 /* Release_64 */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = All;
+			};
+			name = Release_64;
+		};
 		0373F7461519B51A00713D63 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -558,6 +639,17 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		03735EC7152D5A1D0074BEE6 /* Build configuration list for PBXAggregateTarget "All" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				03735EB1152D59D30074BEE6 /* Debug */,
+				03735EB2152D59D30074BEE6 /* Debug_64 */,
+				03735EB3152D59D30074BEE6 /* Release */,
+				03735EB4152D59D30074BEE6 /* Release_64 */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		0373F74B1519B54600713D63 /* Build configuration list for PBXNativeTarget "LVMTest" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
