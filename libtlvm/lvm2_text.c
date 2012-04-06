@@ -24,15 +24,9 @@
 #include <sys/errno.h>
 #include <machine/limits.h>
 
-#if (defined(__DARWIN__) || defined (__APPLE__)) && defined(KERNEL)
-#define LVM2_TEXT_EXPORT __private_extern__
-#else
-#define LVM2_TEXT_EXPORT
-#endif
-
 #define LogTrace(...)
 
-LVM2_TEXT_EXPORT u32 lvm2_calc_crc(u32 initial, const void *buf, size_t size)
+LVM2_EXPORT u32 lvm2_calc_crc(u32 initial, const void *buf, size_t size)
 {
 	static const u32 crctab[] = {
 		0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
@@ -462,7 +456,7 @@ static void lvm2_dom_section_remove_last_child(
 	section->children[section->children_len] = NULL;
 }
 
-LVM2_TEXT_EXPORT void lvm2_dom_section_destroy(
+LVM2_EXPORT void lvm2_dom_section_destroy(
 		struct lvm2_dom_section **const section,
 		const lvm2_bool recursive)
 {
@@ -1170,7 +1164,7 @@ static lvm2_bool parseDictionary(const char *const text, const size_t textLen,
 }
 
 
-LVM2_TEXT_EXPORT lvm2_bool lvm2_parse_text(const char *const text,
+LVM2_EXPORT lvm2_bool lvm2_parse_text(const char *const text,
 		const size_t text_len,
 		struct lvm2_dom_section **const out_result)
 {
@@ -2868,7 +2862,7 @@ static void lvm2_volume_group_destroy(struct lvm2_volume_group **vg)
 	lvm2_free((void**) vg, sizeof(struct lvm2_volume_group));
 }
 
-LVM2_TEXT_EXPORT int lvm2_layout_create(
+LVM2_EXPORT int lvm2_layout_create(
 		const struct lvm2_dom_section *const root_section,
 		struct lvm2_layout **const out_layout)
 {
@@ -3084,7 +3078,7 @@ LVM2_TEXT_EXPORT int lvm2_layout_create(
 	return err;
 }
 
-LVM2_TEXT_EXPORT void lvm2_layout_destroy(
+LVM2_EXPORT void lvm2_layout_destroy(
 		struct lvm2_layout **const layout)
 {
 	lvm2_bounded_string_destroy(&(*layout)->creation_host);

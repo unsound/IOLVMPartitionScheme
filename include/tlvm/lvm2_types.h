@@ -38,6 +38,8 @@ typedef UInt16 u16;
 typedef UInt32 u32;
 typedef UInt64 u64;
 
+#define LVM2_EXPORT __private_extern__
+
 #else
 
 #include <stddef.h> /* For making size_t available. */
@@ -52,6 +54,8 @@ typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+
+#define LVM2_EXPORT
 
 #endif /*(defined(__DARWIN__) || defined (__APPLE__)) && defined(KERNEL) */
 
