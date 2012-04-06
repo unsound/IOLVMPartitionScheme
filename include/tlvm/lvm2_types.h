@@ -19,6 +19,10 @@
 #if !defined(_LIBTLVM_LVM2_TYPES_H)
 #define _LIBTLVM_LVM2_TYPES_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if (defined(__DARWIN__) || defined (__APPLE__)) && defined(KERNEL)
 
 #include <sys/types.h>
@@ -75,5 +79,9 @@ enum {
 
 #define lvm2_min(a, b) ((a) < (b) ? (a) : (b))
 #define lvm2_max(a, b) ((a) > (b) ? (a) : (b))
+
+#ifdef __cplusplus
+};
+#endif
 
 #endif /* !defined(_LIBTLVM_LVM2_TYPES_H) */

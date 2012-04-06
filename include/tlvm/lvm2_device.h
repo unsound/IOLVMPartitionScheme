@@ -19,6 +19,10 @@
 #if !defined(_LVM2_DEVICE_H)
 #define _LVM2_DEVICE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "lvm2_types.h"
 
 struct lvm2_io_buffer;
@@ -35,5 +39,9 @@ int lvm2_device_read(struct lvm2_device *dev, u64 pos, size_t count,
 		struct lvm2_io_buffer *buf);
 
 u32 lvm2_device_get_alignment(struct lvm2_device *dev);
+
+#ifdef __cplusplus
+};
+#endif
 
 #endif /* !defined(_LVM2_DEVICE_H) */

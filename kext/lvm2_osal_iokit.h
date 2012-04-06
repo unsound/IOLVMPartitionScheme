@@ -113,9 +113,11 @@
 #include <IOKit/storage/IOMedia.h>
 #include <IOKit/storage/IOStorage.h>
 
-int lvm2_iokit_device_create(IOStorage *storage, IOMedia *media,
-		struct lvm2_device **out_dev);
-void lvm2_iokit_device_destroy(struct lvm2_device **dev);
+extern "C" {
+	int lvm2_iokit_device_create(IOStorage *storage, IOMedia *media,
+			struct lvm2_device **out_dev);
+	void lvm2_iokit_device_destroy(struct lvm2_device **dev);
+};
 
 #endif /* defined(__cplusplus) */
 
