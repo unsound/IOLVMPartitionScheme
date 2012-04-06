@@ -281,7 +281,7 @@ int lvm2_device_read(struct lvm2_device *const dev, const u64 in_pos,
 		void *aligned_buf = NULL;
 
 		aligned_pos = in_pos - lead_in;
-		aligned_count = lead_in + count + lead_out;
+		aligned_count = lead_in + in_count + lead_out;
 
 		LogError("Warning: Unaligned read. Aligning (%" FMTllu ", "
 			"%" FMTzu ") -> (%" FMTllu ", %" FMTzu ")...",
