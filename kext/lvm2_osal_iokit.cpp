@@ -59,10 +59,16 @@ __private_extern__ int lvm2_io_buffer_create(size_t size,
 	int err;
 	struct lvm2_io_buffer *buf = NULL;
 
+	LogDebug("%s: Entering with out_buf=%p", __FUNCTION__, out_buf);
+
+	LogDebug("Allocating struct lvm2_io_buffer (%" FMTzu " bytes)....",
+		ARGzu(sizeof(struct lvm2_io_buffer)));
 	err = lvm2_malloc(sizeof(struct lvm2_io_buffer), (void**) &buf);
 	if(!err) {
 		IOBufferMemoryDescriptor *buffer;
 
+		LogDebug("Allocating IOBufferMemoryDescriptor (%" FMTzu " "
+			"bytes)....", ARGzu(size));
 		buffer = IOBufferMemoryDescriptor::withCapacity(
 			/* capacity      */ size,
 			/* withDirection */ kIODirectionIn);
@@ -74,6 +80,7 @@ __private_extern__ int lvm2_io_buffer_create(size_t size,
 			err = ENOMEM;
 		}
 		else {
+			LogDebug("Successsfully created lvm2_io_buffer.");
 			buf->buffer = buffer;
 			*out_buf = buf;
 		}
@@ -83,19 +90,33 @@ __private_extern__ int lvm2_io_buffer_create(size_t size,
 		}
 	}
 
+	LogDebug("%s: Leaving with %d.", __FUNCTION__, err);
+
 	return err;
 }
 
 __private_extern__ const void* lvm2_io_buffer_get_bytes(
 		struct lvm2_io_buffer *buf)
 {
-	return buf->buffer->getBytesNoCopy();
+	void *result;
+
+	LogDebug("%s: Entering with buf=%p", __FUNCTION__, buf);
+
+	result = buf->buffer->getBytesNoCopy();
+
+	LogDebug("%s: Leaving.", __FUNCTION__);
+
+	return result;
 }
 
 __private_extern__ void lvm2_io_buffer_destroy(struct lvm2_io_buffer **buf)
 {
+	LogDebug("%s: Entering with buf=%p", __FUNCTION__, buf);
+
 	(*buf)->buffer->release();
 	lvm2_free((void**) buf, sizeof(struct lvm2_io_buffer));
+
+	LogDebug("%s: Leaving.", __FUNCTION__);
 }
 
 struct lvm2_device {
@@ -110,6 +131,9 @@ __private_extern__ int lvm2_iokit_device_create(IOStorage *const storage,
 	int err;
 	UInt64 mediaBlockSize;
 	bool mediaIsOpen = false;
+
+	LogDebug("%s: Entering with storage=%p media=%p out_dev=%p",
+		__FUNCTION__, storage, media, out_dev);
 
 	mediaBlockSize = media->getPreferredBlockSize();
 	if(mediaBlockSize > U32_MAX) {
@@ -145,14 +169,20 @@ __private_extern__ int lvm2_iokit_device_create(IOStorage *const storage,
 		}
 	}
 
+	LogDebug("%s: Leaving with %d.", __FUNCTION__, err);
+
 	return err;
 }
 
 __private_extern__ void lvm2_iokit_device_destroy(struct lvm2_device **dev)
 {
+	LogDebug("%s: Entering with dev=%p.", __FUNCTION__, dev);
+
 	(*dev)->storage->close((*dev)->storage);
 
 	lvm2_free((void**) dev, sizeof(struct lvm2_device));
+
+	LogDebug("%s: Leaving.", __FUNCTION__);
 }
 
 __private_extern__ int lvm2_device_read(struct lvm2_device *const dev,
@@ -169,12 +199,22 @@ __private_extern__ int lvm2_device_read(struct lvm2_device *const dev,
 	size_t count;
 	IOBufferMemoryDescriptor *buf;
 
-	if(in_count > SSIZE_MAX)
+	LogDebug("%s: Entering with dev=%p in_pos=%" FMTllu " "
+		"in_count=%" FMTzu " in_buf=%p",
+		__FUNCTION__, dev, ARGllu(in_pos), ARGzu(in_count), in_buf);
+
+	if(in_count > SSIZE_MAX) {
+		LogDebug("%s: 'in_count' overflows. Leaving with %d.", __FUNCTION__, ERANGE);
 		return ERANGE;
+	}
 
 	lead_in = (u32) (in_pos % dev->block_size);
 	lead_out = (dev->block_size - (u32) ((lead_in + in_count) %
 		dev->block_size)) % dev->block_size;
+
+	LogDebug("lead_in=%" FMTllu, ARGllu(lead_in));
+	LogDebug("lead_out=%" FMTllu, ARGllu(lead_out));
+	LogDebug("in_buf->buffer->getLength()=%" FMTllu, ARGllu(in_buf->buffer->getLength()));
 
 	if(lead_in != 0 || lead_out != 0 ||
 		in_count != in_buf->buffer->getLength())
@@ -198,6 +238,7 @@ __private_extern__ int lvm2_device_read(struct lvm2_device *const dev,
 			LogError("Temporary memory allocation (%" FMTzu " "
 				"bytes) failed.",
 				ARGzu(aligned_count));
+			LogDebug("%s: Leaving with %d.", __FUNCTION__, ENOMEM);
 			return ENOMEM;
 		}
 
@@ -234,6 +275,8 @@ __private_extern__ int lvm2_device_read(struct lvm2_device *const dev,
 	if(buf != in_buf->buffer) {
 		buf->release();
 	}
+
+	LogDebug("%s: Leaving with %d", __FUNCTION__, err);
 
 	return err;
 }
