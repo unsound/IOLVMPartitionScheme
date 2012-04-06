@@ -34,4 +34,6 @@ struct lvm2_device;
 int lvm2_device_read(struct lvm2_device *dev, u64 pos, size_t count,
 		struct lvm2_io_buffer *buf);
 
+u32 lvm2_device_get_alignment(struct lvm2_device *dev);
+
 #endif /* !defined(_LVM2_DEVICE_H) */

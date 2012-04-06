@@ -237,3 +237,8 @@ __private_extern__ int lvm2_device_read(struct lvm2_device *const dev,
 
 	return err;
 }
+
+__private_extern__ u32 lvm2_device_get_alignment(struct lvm2_device *dev)
+{
+	return dev->block_size;
+}

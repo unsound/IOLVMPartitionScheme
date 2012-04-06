@@ -329,3 +329,8 @@ int lvm2_device_read(struct lvm2_device *const dev, const u64 in_pos,
 
 	return err;
 }
+
+u32 lvm2_device_get_alignment(struct lvm2_device *dev)
+{
+	return dev->block_size;
+}
