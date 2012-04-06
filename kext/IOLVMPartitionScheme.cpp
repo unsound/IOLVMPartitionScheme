@@ -199,22 +199,20 @@ IOReturn IOLVMPartitionScheme::requestProbe(IOOptionBits options)
 	return partitions ? kIOReturnSuccess : kIOReturnError;
 }
 
-static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
-		const UInt64 metadataOffset, const UInt64 metadataSize,
-		const raw_locn *const locn,
+static int readLVM2Text(struct lvm2_device *dev, const UInt64 metadataOffset,
+		const UInt64 metadataSize, const raw_locn *const locn,
 		struct lvm2_layout **const outLayout)
 {
-	const UInt64 mediaBlockSize = media->getPreferredBlockSize();
+	const UInt64 mediaBlockSize = lvm2_device_get_alignment(dev);
 
 	const UInt64 locnOffset = le64_to_cpu(locn->offset);
 	const UInt64 locnSize = le64_to_cpu(locn->size);
 	const UInt32 locnChecksum = le32_to_cpu(locn->checksum);
 	const UInt32 locnFiller = le32_to_cpu(locn->filler);
 
-	bool res = false;
-	IOReturn status = kIOReturnError;
+	int err = EIO;
 
-	IOBufferMemoryDescriptor *textBuffer = NULL;
+	struct lvm2_io_buffer *textBuffer = NULL;
 	size_t textBufferInset;
 	size_t textBufferSize;
 
@@ -239,22 +237,26 @@ static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
 		LogError("locn offset out of range for metadata area (offset: "
 			"%" FMTllu " max: %" FMTllu ").",
 			ARGllu(locnOffset), ARGllu(metadataSize));
+		err = EINVAL;
 		goto errOut;
 	}
 	else if(locnSize > (metadataSize - locnOffset)) {
 		LogError("locn size out of range for metadata area (size: "
 			"%" FMTllu " max: %" FMTllu ").",
 			ARGllu(locnSize), ARGllu(metadataSize - locnOffset));
+		err = EINVAL;
 		goto errOut;
 	}
 	else if(locnSize > SIZE_MAX) {
 		LogError("locnSize out of range (%" FMTllu ").",
 			ARGllu(locnSize));
+		err = EINVAL;
 		goto errOut;
 	}
 	else if(mediaBlockSize > SIZE_MAX) {
 		LogError("mediaBlockSize out of range (%" FMTllu ").",
 			ARGllu(mediaBlockSize));
+		err = EINVAL;
 		goto errOut;
 	}
 
@@ -265,75 +267,76 @@ static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
 		(size_t) IORound(textBufferInset + locnSize, mediaBlockSize);
 	LogDebug("textBufferSize = %" FMTzu, ARGzu(textBufferSize));
 
-	textBuffer = IOBufferMemoryDescriptor::withCapacity(
-		/* capacity      */ textBufferSize,
-		/* withDirection */ kIODirectionIn);
-	if(textBuffer == NULL) {
+	err = lvm2_io_buffer_create(textBufferSize, &textBuffer);
+	if(err) {
 		LogError("Error while allocating %" FMTzu " bytes of memory "
-			"for 'textBuffer'.", ARGzu(textBuffer));
+			"for 'textBuffer': %d", ARGzu(textBuffer), err);
 		goto errOut;
 	}
 
 	readOffset = metadataOffset + (locnOffset - textBufferInset);
 	LogDebug("readOffset = %" FMTllu, ARGllu(readOffset));
 
-	status = media->read(obj, readOffset, textBuffer);
-	if(status != kIOReturnSuccess) {
-		LogError("Error %d while reading LVM2 text.", status);
+	err = lvm2_device_read(dev, readOffset, textBufferSize, textBuffer);
+	if(err) {
+		LogError("Error %d while reading LVM2 text.", err);
 		goto errOut;
 	}
 
-	text = &((char*) textBuffer->getBytesNoCopy())[textBufferInset];
+	text = &((char*) lvm2_io_buffer_get_bytes(textBuffer))[textBufferInset];
 	textLen = (size_t) locnSize;
 
 	//LogDebug("LVM2 text: %.*s", textLen, text);
 
 	if(!lvm2_parse_text(text, textLen, &parseResult)) {
 		LogError("Error while parsing text.");
+		err = EIO;
 		goto errOut;
 	}
 
-	{
-		int err;
-
-		err = lvm2_layout_create(parseResult, &layout);
-		if(err) {
-			LogError("Error while converting parsed result into "
-				"structured data: %d", err);
-			goto errOut;
-		}
+	err = lvm2_layout_create(parseResult, &layout);
+	if(err) {
+		LogError("Error while converting parsed result into structured "
+			"data: %d", err);
+		goto errOut;
 	}
 
 	lvm2_dom_section_destroy(&parseResult, LVM2_TRUE);
 
 	*outLayout = layout;
-
-	res = true;
 cleanup:
 	if(parseResult)
 		lvm2_dom_section_destroy(&parseResult, LVM2_TRUE);
 	if(textBuffer)
-		textBuffer->release();
+		lvm2_io_buffer_destroy(&textBuffer);
 
-	return res;
+	return err;
 errOut:
+	if(!err) {
+		LogError("Warning: At errOut, but err not set. Setting default "
+			"errno value (EIO).");
+		err = EIO;
+	}
+
 	goto cleanup;
 }
 
 OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 {
-	IOBufferMemoryDescriptor *buffer = NULL;
-	IOBufferMemoryDescriptor *secondaryBuffer = NULL;
+	struct lvm2_io_buffer *buffer = NULL;
+	struct lvm2_io_buffer *secondaryBuffer = NULL;
+	struct lvm2_device *dev = NULL;
+
 	UInt64 bufferReadAt = 0;
 	size_t bufferSize = 0;
 	size_t secondaryBufferSize = 0;
 	IOMedia *media = getProvider();
 	UInt64 mediaBlockSize = media->getPreferredBlockSize();
-	bool mediaIsOpen = false;
 	OSSet *partitions = NULL;
 	IOReturn status = kIOReturnError;
 	UInt32 i;
 	SInt32 firstLabel = -1;
+	int err;
 
 	LogDebug("%s: Entering with score=%p.", __FUNCTION__, score);
 
@@ -353,10 +356,8 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 	/* Allocate a suitably sized buffer. */
 
 	bufferSize = (size_t) IORound(LVM_SECTOR_SIZE, mediaBlockSize);
-	buffer = IOBufferMemoryDescriptor::withCapacity(
-		/* capacity      */ bufferSize,
-		/* withDirection */ kIODirectionIn);
-	if(buffer == NULL) {
+	err = lvm2_io_buffer_create(bufferSize, &buffer);
+	if(err) {
 		LogError("Error while allocating 'buffer' (%" FMTzu " bytes).",
 			ARGzu(bufferSize));
 		goto scanErr;
@@ -367,10 +368,8 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 
 	secondaryBufferSize =
 		(size_t) IORound(LVM_MDA_HEADER_SIZE, mediaBlockSize);
-	secondaryBuffer = IOBufferMemoryDescriptor::withCapacity(
-		/* capacity      */ secondaryBufferSize,
-		/* withDirection */ kIODirectionIn);
-	if(secondaryBuffer == NULL) {
+	err = lvm2_io_buffer_create(secondaryBufferSize, &secondaryBuffer);
+	if(err) {
 		LogError("Error while allocating 'secondaryBuffer' "
 			"(%" FMTzu "bytes).",
 			ARGzu(secondaryBufferSize));
@@ -393,9 +392,9 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 
 	/* Open the media with read-only access. */
 
-	mediaIsOpen = open(this, 0, kIOStorageAccessReader);
-	if(mediaIsOpen == false) {
-		LogError("Error while opening media.");
+	err = lvm2_iokit_device_create(this, media, &dev);
+	if(err) {
+		LogError("Error while opening device: %d", err);
 		goto scanErr;
 	}
 
@@ -412,14 +411,15 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		LogDebug("Searching for LVM label at sector %" FMTlu "...",
 			ARGlu(i));
 
-		status = media->read(this, bufferReadAt, buffer);
-		if(status != kIOReturnSuccess) {
+		err = lvm2_device_read(dev, bufferReadAt, bufferSize, buffer);
+		if(err) {
 			LogError("Error while reading sector %" FMTlu ".",
 				ARGlu(i));
 			goto scanErr;
 		}
 
-		labelHeader = (struct label_header*) buffer->getBytesNoCopy();
+		labelHeader = (const struct label_header*)
+			lvm2_io_buffer_get_bytes(buffer);
 
 		LogDebug("\tlabel_header = {");
 		LogDebug("\t\t.id = '%.*s'", 8, labelHeader->id);
@@ -471,7 +471,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 	}
 
 	{
-		void *sectorBytes;
+		const void *sectorBytes;
 		const struct label_header *labelHeader;
 		const struct pv_header *pvHeader;
 
@@ -490,7 +490,8 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 
 		bufferReadAt = firstLabel * LVM_SECTOR_SIZE;
 
-		status = media->read(this, bufferReadAt, buffer);
+		status =
+			lvm2_device_read(dev, bufferReadAt, bufferSize, buffer);
 		if(status != kIOReturnSuccess) {
 			LogError("\tError while reading label sector "
 				"%" FMTlu ".",
@@ -498,8 +499,8 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			goto scanErr;
 		}
 
-		sectorBytes = buffer->getBytesNoCopy();
-		labelHeader = (struct label_header*) sectorBytes;
+		sectorBytes = lvm2_io_buffer_get_bytes(buffer);
+		labelHeader = (const struct label_header*) sectorBytes;
 
 		/* Re-verify label fields. If the first three don't verify we
 		 * have a very strange situation, indicated with the tag
@@ -663,19 +664,19 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			meta_offset = le64_to_cpu(meta_locn->offset);
 			meta_size = le64_to_cpu(meta_locn->size);
 
-			status = media->read(this, meta_offset,
-				secondaryBuffer);
-			if(status != kIOReturnSuccess) {
+			err = lvm2_device_read(dev, meta_offset,
+				secondaryBufferSize, secondaryBuffer);
+			if(err) {
 				LogError("Error while reading first metadata "
 					"sector of PV number %" FMTlu " "
-					"(offset %" FMTzu " bytes).",
+					"(offset %" FMTzu " bytes): %d",
 					ARGlu(disk_areas_idx),
-					ARGzu(meta_offset));
+					ARGzu(meta_offset), err);
 				goto scanErr;
 			}
 
-			mdaHeader = (struct mda_header*)
-				secondaryBuffer->getBytesNoCopy();
+			mdaHeader = (const struct mda_header*)
+				lvm2_io_buffer_get_bytes(secondaryBuffer);
 
 #if defined(DEBUG)
 			LogDebug("mdaHeader[%" FMTlu "] = {",
@@ -775,10 +776,11 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 				continue;
 			}
 
-			if(!readLVM2Text(media, this, meta_offset, meta_size,
-				&mdaHeader->raw_locns[0], &layout))
-			{
-				LogDebug("Error while reading LVM2 text.");
+			err = readLVM2Text(dev, meta_offset, meta_size,
+				&mdaHeader->raw_locns[0], &layout);
+			if(err) {
+				LogDebug("Error while reading LVM2 text: %d",
+					err);
 				continue;
 			}
 
@@ -952,9 +954,9 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 
 	// Release our resources.
 
-	close(this);
-	secondaryBuffer->release();
-	buffer->release();
+	lvm2_iokit_device_destroy(&dev);
+	lvm2_io_buffer_destroy(&secondaryBuffer);
+	lvm2_io_buffer_destroy(&buffer);
 
 	return partitions;
 
@@ -962,14 +964,14 @@ scanErr:
 
 	// Release our resources.
 
-	if(mediaIsOpen)
-		close(this);
+	if(dev)
+		lvm2_iokit_device_destroy(&dev);
 	if(partitions)
 		partitions->release();
 	if(secondaryBuffer)
-		secondaryBuffer->release();
+		lvm2_io_buffer_destroy(&secondaryBuffer);
 	if(buffer)
-		buffer->release();
+		lvm2_io_buffer_destroy(&buffer);
 
 	return NULL;
 }
