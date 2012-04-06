@@ -104,7 +104,7 @@ struct lvm2_device {
 	u32 block_size;
 };
 
-__private_extern__ int lvm2_unix_device_create(IOStorage *const storage,
+__private_extern__ int lvm2_iokit_device_create(IOStorage *const storage,
 		IOMedia *const media, struct lvm2_device **const out_dev)
 {
 	int err;
@@ -148,7 +148,7 @@ __private_extern__ int lvm2_unix_device_create(IOStorage *const storage,
 	return err;
 }
 
-__private_extern__ void lvm2_unix_device_destroy(struct lvm2_device **dev)
+__private_extern__ void lvm2_iokit_device_destroy(struct lvm2_device **dev)
 {
 	(*dev)->storage->close((*dev)->storage);
 
