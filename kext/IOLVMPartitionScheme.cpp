@@ -30,6 +30,10 @@
 
 //#define DEBUG
 
+#define le16_to_cpu OSSwapLittleToHostInt16
+#define le32_to_cpu OSSwapLittleToHostInt32
+#define le64_to_cpu OSSwapLittleToHostInt64
+
 static const struct raw_locn null_raw_locn = { 0, 0, 0, 0 };
 
 #define super IOPartitionScheme
@@ -202,10 +206,10 @@ static bool readLVM2Text(IOMedia *const media, IOLVMPartitionScheme *const obj,
 {
 	const UInt64 mediaBlockSize = media->getPreferredBlockSize();
 
-	const UInt64 locnOffset = OSSwapLittleToHostInt64(locn->offset);
-	const UInt64 locnSize = OSSwapLittleToHostInt64(locn->size);
-	const UInt32 locnChecksum = OSSwapLittleToHostInt32(locn->checksum);
-	const UInt32 locnFiller = OSSwapLittleToHostInt32(locn->filler);
+	const UInt64 locnOffset = le64_to_cpu(locn->offset);
+	const UInt64 locnSize = le64_to_cpu(locn->size);
+	const UInt32 locnChecksum = le32_to_cpu(locn->checksum);
+	const UInt32 locnFiller = le32_to_cpu(locn->filler);
 
 	bool res = false;
 	IOReturn status = kIOReturnError;
@@ -420,12 +424,11 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		LogDebug("\tlabel_header = {");
 		LogDebug("\t\t.id = '%.*s'", 8, labelHeader->id);
 		LogDebug("\t\t.sector_xl = %" FMTllu,
-			ARGllu(OSSwapLittleToHostInt64(
-			labelHeader->sector_xl)));
+			ARGllu(le64_to_cpu(labelHeader->sector_xl)));
 		LogDebug("\t\t.crc_xl = 0x%08" FMTlX,
-			ARGlX(OSSwapLittleToHostInt32(labelHeader->crc_xl)));
+			ARGlX(le32_to_cpu(labelHeader->crc_xl)));
 		LogDebug("\t\t.offset_xl = %" FMTlu,
-			ARGlu(OSSwapLittleToHostInt32(labelHeader->offset_xl)));
+			ARGlu(le32_to_cpu(labelHeader->offset_xl)));
 		LogDebug("\t\t.type = '%.*s'", 8, labelHeader->type);
 		LogDebug("\t}");
 
@@ -434,7 +437,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			continue;
 		}
 
-		labelSector = OSSwapLittleToHostInt64(labelHeader->sector_xl);
+		labelSector = le64_to_cpu(labelHeader->sector_xl);
 		if(labelSector != i) {
 			LogError("'sector_xl' does not match actual sector "
 				"(%" FMTllu " != %" FMTlu ").",
@@ -442,7 +445,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			continue;
 		}
 
-		labelCrc = OSSwapLittleToHostInt32(labelHeader->crc_xl);
+		labelCrc = le32_to_cpu(labelHeader->crc_xl);
 		calculatedCrc = lvm2_calc_crc(LVM_INITIAL_CRC,
 			&labelHeader->offset_xl, LVM_SECTOR_SIZE -
 			offsetof(label_header, offset_xl));
@@ -506,7 +509,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			goto scanErr;
 		}
 
-		labelSector = OSSwapLittleToHostInt64(labelHeader->sector_xl);
+		labelSector = le64_to_cpu(labelHeader->sector_xl);
 		if(labelSector != (UInt32) firstLabel) {
 			LogError("Unexpected: 'sector_xl' does not match "
 				 "actual sector (%" FMTllu " != %" FMTlu ").",
@@ -514,7 +517,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			goto scanErr;
 		}
 
-		labelCrc = OSSwapLittleToHostInt32(labelHeader->crc_xl);
+		labelCrc = le32_to_cpu(labelHeader->crc_xl);
 		calculatedCrc = lvm2_calc_crc(LVM_INITIAL_CRC,
 			&labelHeader->offset_xl, LVM_SECTOR_SIZE -
 			offsetof(label_header, offset_xl));
@@ -526,7 +529,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			goto scanErr;
 		}
 
-		contentOffset = OSSwapLittleToHostInt32(labelHeader->offset_xl);
+		contentOffset = le32_to_cpu(labelHeader->offset_xl);
 		if(contentOffset < sizeof(struct label_header)) {
 			LogError("Content overlaps header (content offset: "
 				 "%" FMTlu ").", ARGlu(contentOffset));
@@ -586,8 +589,8 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 #if defined(DEBUG)
 		LogDebug("\tpvHeader = {");
 		LogDebug("\t\tpv_uuid = '%.*s'", LVM_ID_LEN, pvHeader->pv_uuid);
-		LogDebug("\t\tdevice_size_xl = %" FMTllu, ARGllu(
-			OSSwapLittleToHostInt64(pvHeader->device_size_xl)));
+		LogDebug("\t\tdevice_size_xl = %" FMTllu,
+			ARGllu(le64_to_cpu(pvHeader->device_size_xl)));
 		LogDebug("\t\tdisk_areas_xl = {");
 		LogDebug("\t\t\tdata_areas = {");
 		disk_areas_idx = 0;
@@ -596,10 +599,10 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		{
 			LogDebug("\t\t\t\t{");
 			LogDebug("\t\t\t\t\toffset = %" FMTllu,
-				ARGllu(OSSwapLittleToHostInt64(pvHeader->
+				ARGllu(le64_to_cpu(pvHeader->
 				disk_areas_xl[disk_areas_idx].offset)));
 			LogDebug("\t\t\t\t\tsize = %" FMTllu,
-				ARGllu(OSSwapLittleToHostInt64(pvHeader->
+				ARGllu(le64_to_cpu(pvHeader->
 				disk_areas_xl[disk_areas_idx].size)));
 			LogDebug("\t\t\t\t}");
 
@@ -614,10 +617,10 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		{
 			LogDebug("\t\t\t\t{");
 			LogDebug("\t\t\t\t\toffset = %" FMTllu,
-				ARGllu(OSSwapLittleToHostInt64(pvHeader->
+				ARGllu(le64_to_cpu(pvHeader->
 				disk_areas_xl[disk_areas_idx].offset)));
 			LogDebug("\t\t\t\t\tsize = %" FMTllu,
-				ARGllu(OSSwapLittleToHostInt64(pvHeader->
+				ARGllu(le64_to_cpu(pvHeader->
 				disk_areas_xl[disk_areas_idx].size)));
 			LogDebug("\t\t\t\t}");
 
@@ -628,7 +631,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 		LogDebug("\t}");
 #endif /* defined(DEBUG) */
 
-		deviceSize = OSSwapLittleToHostInt64(pvHeader->device_size_xl);
+		deviceSize = le64_to_cpu(pvHeader->device_size_xl);
 		disk_areas_idx = 0;
 		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0) {
 			const disk_locn *locn;
@@ -657,10 +660,8 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			meta_locn = &pvHeader->disk_areas_xl[dataAreasLength +
 				1 + disk_areas_idx];
 
-			meta_offset =
-				OSSwapLittleToHostInt64(meta_locn->offset);
-			meta_size =
-				OSSwapLittleToHostInt64(meta_locn->size);
+			meta_offset = le64_to_cpu(meta_locn->offset);
+			meta_size = le64_to_cpu(meta_locn->size);
 
 			status = media->read(this, meta_offset,
 				secondaryBuffer);
@@ -680,18 +681,14 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			LogDebug("mdaHeader[%" FMTlu "] = {",
 				ARGlu(disk_areas_idx));
 			LogDebug("\tchecksum_xl = 0x%08" FMTlX,
-				ARGlX(OSSwapLittleToHostInt32(
-				mdaHeader->checksum_xl)));
+				ARGlX(le32_to_cpu(mdaHeader->checksum_xl)));
 			LogDebug("\tmagic = '%.*s'", 16, mdaHeader->magic);
 			LogDebug("\tversion = %" FMTlu,
-				ARGlu(OSSwapLittleToHostInt32(
-				mdaHeader->version)));
+				ARGlu(le32_to_cpu(mdaHeader->version)));
 			LogDebug("\tstart = %" FMTllu,
-				ARGllu(OSSwapLittleToHostInt64(
-				mdaHeader->start)));
+				ARGllu(le64_to_cpu(mdaHeader->start)));
 			LogDebug("\tsize = %" FMTllu,
-				ARGllu(OSSwapLittleToHostInt64(
-				mdaHeader->size)));
+				ARGllu(le64_to_cpu(mdaHeader->size)));
 			LogDebug("\traw_locns = {");
 			{
 				size_t raw_locns_idx = 0;
@@ -707,16 +704,16 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 					LogDebug("\t\t[%" FMTllu "] = {",
 						ARGllu(raw_locns_idx));
 					LogDebug("\t\t\toffset = %" FMTllu,
-						ARGllu(OSSwapLittleToHostInt64(
+						ARGllu(le64_to_cpu(
 						cur_locn->offset)));
 					LogDebug("\t\t\tsize = %" FMTllu,
-						ARGllu(OSSwapLittleToHostInt64(
+						ARGllu(le64_to_cpu(
 						cur_locn->size)));
 					LogDebug("\t\t\tchecksum = 0x%08" FMTlX,
-						ARGlX(OSSwapLittleToHostInt32(
+						ARGlX(le32_to_cpu(
 						cur_locn->checksum)));
 					LogDebug("\t\t\tfiller = %" FMTlu,
-						ARGlu(OSSwapLittleToHostInt32(
+						ARGlu(le32_to_cpu(
 						cur_locn->filler)));
 					LogDebug("\t\t}");
 
@@ -727,12 +724,10 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 			LogDebug("}");
 #endif /* defined(DEBUG) */
 
-			mda_checksum =
-				OSSwapLittleToHostInt32(mdaHeader->checksum_xl);
-			mda_version =
-				OSSwapLittleToHostInt32(mdaHeader->version);
-			mda_start = OSSwapLittleToHostInt64(mdaHeader->start);
-			mda_size = OSSwapLittleToHostInt64(mdaHeader->size);
+			mda_checksum = le32_to_cpu(mdaHeader->checksum_xl);
+			mda_version = le32_to_cpu(mdaHeader->version);
+			mda_start = le64_to_cpu(mdaHeader->start);
+			mda_size = le64_to_cpu(mdaHeader->size);
 
 			mda_calculated_checksum = lvm2_calc_crc(LVM_INITIAL_CRC,
 				mdaHeader->magic, LVM_MDA_HEADER_SIZE -
