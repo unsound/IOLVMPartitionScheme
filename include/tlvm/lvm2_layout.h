@@ -23,6 +23,8 @@
 extern "C" {
 #endif
 
+#include "lvm2_types.h"
+
 /* <Declarations from lvm tools> */
 
 /* Declaration from: lib/metadata/metadata-exported.h */
@@ -45,25 +47,25 @@ extern "C" {
 
 /* Declaration from: lib/label/label.h */
 struct label_header {
-	int8_t id[8];		/* LABELONE */
-	uint64_t sector_xl;	/* Sector number of this label */
-	uint32_t crc_xl;	/* From next field to end of sector */
-	uint32_t offset_xl;	/* Offset from start of struct to contents */
-	int8_t type[8];		/* LVM2 001 */
+	u8 id[8];		/* LABELONE */
+	le64 sector_xl;	/* Sector number of this label */
+	le32 crc_xl;	/* From next field to end of sector */
+	le32 offset_xl;	/* Offset from start of struct to contents */
+	u8 type[8];		/* LVM2 001 */
 } __attribute__ ((packed));
 
 /* Declaration from: lib/format_text/layout.h */
 struct disk_locn {
-	uint64_t offset;	/* Offset in bytes to start sector */
-	uint64_t size;		/* Bytes */
+	le64 offset;	/* Offset in bytes to start sector */
+	le64 size;		/* Bytes */
 } __attribute__ ((packed));
 
 /* Declaration from: lib/format_text/layout.h */
 struct pv_header {
-	int8_t pv_uuid[LVM_ID_LEN];
+	u8 pv_uuid[LVM_ID_LEN];
 
 	/* This size can be overridden if PV belongs to a VG */
-	uint64_t device_size_xl;	/* Bytes */
+	le64 device_size_xl;	/* Bytes */
 
 	/* NULL-terminated list of data areas followed by */
 	/* NULL-terminated list of metadata area headers */
@@ -72,19 +74,19 @@ struct pv_header {
 
 /* Declaration from: lib/format_text/layout.h */
 struct raw_locn {
-	uint64_t offset;	/* Offset in bytes to start sector */
-	uint64_t size;		/* Bytes */
-	uint32_t checksum;
-	uint32_t filler;
+	le64 offset;	/* Offset in bytes to start sector */
+	le64 size;		/* Bytes */
+	le32 checksum;
+	le32 filler;
 } __attribute__ ((packed));
 
 /* Declaration from: lib/format_text/layout.h */
 struct mda_header {
-	uint32_t checksum_xl;	/* Checksum of rest of mda_header */
-	int8_t magic[16];	/* To aid scans for metadata */
-	uint32_t version;
-	uint64_t start;		/* Absolute start byte of mda_header */
-	uint64_t size;		/* Size of metadata area */
+	le32 checksum_xl;	/* Checksum of rest of mda_header */
+	u8 magic[16];	/* To aid scans for metadata */
+	le32 version;
+	le64 start;		/* Absolute start byte of mda_header */
+	le64 size;		/* Size of metadata area */
 	
 	struct raw_locn raw_locns[0];	/* NULL-terminated list */
 } __attribute__ ((packed));
