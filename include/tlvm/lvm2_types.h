@@ -25,6 +25,7 @@ extern "C" {
 
 #if (defined(__DARWIN__) || defined (__APPLE__)) && defined(KERNEL)
 
+#include <sys/errno.h>
 #include <sys/types.h>
 #include <libkern/OSTypes.h>
 
@@ -42,6 +43,7 @@ typedef UInt64 u64;
 
 #else
 
+#include <errno.h>
 #include <stddef.h> /* For making size_t available. */
 #include <stdint.h>
 
