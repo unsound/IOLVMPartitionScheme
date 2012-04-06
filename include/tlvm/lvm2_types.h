@@ -59,6 +59,20 @@ typedef uint64_t u64;
 
 #endif /*(defined(__DARWIN__) || defined (__APPLE__)) && defined(KERNEL) */
 
+typedef s16 sle16;
+typedef s32 sle32;
+typedef s64 sle64;
+typedef u16 le16;
+typedef u32 le32;
+typedef u64 le64;
+
+typedef s16 sbe16;
+typedef s32 sbe32;
+typedef s64 sbe64;
+typedef u16 be16;
+typedef u32 be32;
+typedef u64 be64;
+
 #define S8_MAX  0x7F
 #define S16_MAX 0x7FFF
 #define S32_MAX 0x7FFFFFFFL
