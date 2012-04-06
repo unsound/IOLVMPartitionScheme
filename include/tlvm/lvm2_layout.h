@@ -40,7 +40,7 @@ extern "C" {
 #define LVM_LVM2_LABEL          "LVM2 001"
 
 /* Declaration from: lib/format_text/layout.h */
-#define LVM_MDA_HEADER_SIZE         512
+#define LVM_MDA_HEADER_SIZE     512
 
 /* Declaration from: lib/uuid/uuid.h */
 #define LVM_ID_LEN              32
