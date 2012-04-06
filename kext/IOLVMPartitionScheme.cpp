@@ -325,7 +325,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 	IOBufferMemoryDescriptor *buffer = NULL;
 	IOBufferMemoryDescriptor *secondaryBuffer = NULL;
 	UInt64 bufferReadAt = 0;
-	vm_size_t bufferSize = 0;
+	size_t bufferSize = 0;
 	size_t secondaryBufferSize = 0;
 	IOMedia *media = getProvider();
 	UInt64 mediaBlockSize = media->getPreferredBlockSize();
