@@ -17,6 +17,7 @@
  */
 
 #include "lvm2_text.h"
+#include "lvm2_endians.h"
 #include "lvm2_osal.h"
 
 #include <string.h>
@@ -3089,4 +3090,135 @@ LVM2_EXPORT void lvm2_layout_destroy(
 	lvm2_bounded_string_destroy(&(*layout)->vg_name);
 
 	lvm2_free((void**) layout, sizeof(struct lvm2_layout));
+}
+
+#define AlignSize(size, alignment) \
+        ((((size) + (alignment) - 1) / (alignment)) * (alignment))
+
+LVM2_EXPORT int lvm2_read_text(struct lvm2_device *dev,
+		const u64 metadata_offset, const u64 metadata_size,
+		const struct raw_locn *const locn,
+		struct lvm2_layout **const out_layout)
+{
+	const u64 media_block_size = lvm2_device_get_alignment(dev);
+
+	const u64 locn_offset = le64_to_cpu(locn->offset);
+	const u64 locn_size = le64_to_cpu(locn->size);
+	const u32 locn_checksum = le32_to_cpu(locn->checksum);
+	const u32 locn_filler = le32_to_cpu(locn->filler);
+
+	int err = EIO;
+
+	struct lvm2_io_buffer *text_buffer = NULL;
+	size_t text_buffer_inset;
+	size_t text_buffer_size;
+
+	u64 read_offset;
+
+	char *text;
+	size_t text_len;
+
+	struct lvm2_dom_section *parse_result;
+	struct lvm2_layout *layout;
+
+	LogDebug("%s: Entering with dev=%p metadata_offset = %" FMTllu " "
+		"metadata_size = %" FMTllu " locn=%p out_layout=%p...",
+		__FUNCTION__, dev, ARGllu(metadata_offset),
+		ARGllu(metadata_size), locn, out_layout);
+
+	LogDebug("media_block_size = %" FMTllu, ARGllu(media_block_size));
+	LogDebug("locn_offset = %" FMTllu, ARGllu(locn_offset));
+	LogDebug("locn_size = %" FMTllu, ARGllu(locn_size));
+	LogDebug("locn_checksum = 0x%" FMTlX, ARGlX(locn_checksum));
+	LogDebug("locn_filler = 0x%" FMTlX, ARGlX(locn_filler));
+
+	if(locn_offset >= metadata_size) {
+		LogError("locn offset out of range for metadata area (offset: "
+			"%" FMTllu " max: %" FMTllu ").",
+			ARGllu(locn_offset), ARGllu(metadata_size));
+		err = EINVAL;
+		goto err_out;
+	}
+	else if(locn_size > (metadata_size - locn_offset)) {
+		LogError("locn size out of range for metadata area (size: "
+			"%" FMTllu " max: %" FMTllu ").",
+			ARGllu(locn_size), ARGllu(metadata_size - locn_offset));
+		err = EINVAL;
+		goto err_out;
+	}
+	else if(locn_size > SIZE_MAX) {
+		LogError("locn_size out of range (%" FMTllu ").",
+			ARGllu(locn_size));
+		err = EINVAL;
+		goto err_out;
+	}
+	else if(media_block_size > SIZE_MAX) {
+		LogError("media_block_size out of range (%" FMTllu ").",
+			ARGllu(media_block_size));
+		err = EINVAL;
+		goto err_out;
+	}
+
+	text_buffer_inset = (size_t) (locn_offset % media_block_size);
+	LogDebug("text_buffer_inset = %" FMTzu, ARGzu(text_buffer_inset));
+
+	text_buffer_size = (size_t) AlignSize(text_buffer_inset + locn_size,
+		media_block_size);
+	LogDebug("text_buffer_size = %" FMTzu, ARGzu(text_buffer_size));
+
+	err = lvm2_io_buffer_create(text_buffer_size, &text_buffer);
+	if(err) {
+		LogError("Error while allocating %" FMTzu " bytes of memory "
+			"for 'textBuffer': %d", ARGzu(text_buffer_size), err);
+		goto err_out;
+	}
+
+	read_offset = metadata_offset + (locn_offset - text_buffer_inset);
+	LogDebug("read_offset = %" FMTllu, ARGllu(read_offset));
+
+	err = lvm2_device_read(dev, read_offset, text_buffer_size, text_buffer);
+	if(err) {
+		LogError("Error %d while reading LVM2 text.", err);
+		goto err_out;
+	}
+
+	text = &((char*) lvm2_io_buffer_get_bytes(text_buffer))
+		[text_buffer_inset];
+	text_len = (size_t) locn_size;
+
+	//LogDebug("LVM2 text: %.*s", text_len, text);
+
+	if(!lvm2_parse_text(text, text_len, &parse_result)) {
+		LogError("Error while parsing text.");
+		err = EIO;
+		goto err_out;
+	}
+
+	err = lvm2_layout_create(parse_result, &layout);
+	if(err) {
+		LogError("Error while converting parsed result into structured "
+			"data: %d", err);
+		goto err_out;
+	}
+
+	lvm2_dom_section_destroy(&parse_result, LVM2_TRUE);
+
+	*out_layout = layout;
+cleanup:
+	if(err && layout)
+		lvm2_layout_destroy(&layout);
+	if(parse_result)
+		lvm2_dom_section_destroy(&parse_result, LVM2_TRUE);
+	if(text_buffer)
+		lvm2_io_buffer_destroy(&text_buffer);
+
+	return err;
+err_out:
+	if(!err) {
+		LogError("Warning: At err_out, but err not set. Setting "
+			"default errno value (EIO).");
+		err = EIO;
+	}
+
+	goto cleanup;
 }

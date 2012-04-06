@@ -19,6 +19,8 @@
 #if !defined(_LIBTLVM_LVM2_TEXT_H)
 #define _LIBTLVM_LVM2_TEXT_H
 
+#include "lvm2_device.h"
+#include "lvm2_layout.h"
 #include "lvm2_types.h"
 
 #ifdef __cplusplus
@@ -178,6 +180,10 @@ int lvm2_layout_create(const struct lvm2_dom_section *root_section,
 		struct lvm2_layout **out_layout);
 
 void lvm2_layout_destroy(struct lvm2_layout **parsed_text);
+
+int lvm2_read_text(struct lvm2_device *dev, u64 metadata_offset,
+		u64 metadata_size, const struct raw_locn *locn,
+		struct lvm2_layout **out_layout);
 
 #ifdef __cplusplus
 }

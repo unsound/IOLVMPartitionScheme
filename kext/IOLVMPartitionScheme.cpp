@@ -199,128 +199,6 @@ IOReturn IOLVMPartitionScheme::requestProbe(IOOptionBits options)
 	return partitions ? kIOReturnSuccess : kIOReturnError;
 }
 
-static int readLVM2Text(struct lvm2_device *dev, const UInt64 metadataOffset,
-		const UInt64 metadataSize, const raw_locn *const locn,
-		struct lvm2_layout **const outLayout)
-{
-	const UInt64 mediaBlockSize = lvm2_device_get_alignment(dev);
-
-	const UInt64 locnOffset = le64_to_cpu(locn->offset);
-	const UInt64 locnSize = le64_to_cpu(locn->size);
-	const UInt32 locnChecksum = le32_to_cpu(locn->checksum);
-	const UInt32 locnFiller = le32_to_cpu(locn->filler);
-
-	int err = EIO;
-
-	struct lvm2_io_buffer *textBuffer = NULL;
-	size_t textBufferInset;
-	size_t textBufferSize;
-
-	UInt64 readOffset;
-
-	char *text;
-	size_t textLen;
-
-	struct lvm2_dom_section *parseResult;
-	struct lvm2_layout *layout;
-
-	LogDebug("metadataOffset = %" FMTllu, ARGllu(metadataOffset));
-	LogDebug("metadataSize = %" FMTllu, ARGllu(metadataSize));
-
-	LogDebug("mediaBlockSize = %" FMTllu, ARGllu(mediaBlockSize));
-	LogDebug("locnOffset = %" FMTllu, ARGllu(locnOffset));
-	LogDebug("locnSize = %" FMTllu, ARGllu(locnSize));
-	LogDebug("locnChecksum = 0x%" FMTlX, ARGlX(locnChecksum));
-	LogDebug("locnFiller = 0x%" FMTlX, ARGlX(locnFiller));
-
-	if(locnOffset >= metadataSize) {
-		LogError("locn offset out of range for metadata area (offset: "
-			"%" FMTllu " max: %" FMTllu ").",
-			ARGllu(locnOffset), ARGllu(metadataSize));
-		err = EINVAL;
-		goto errOut;
-	}
-	else if(locnSize > (metadataSize - locnOffset)) {
-		LogError("locn size out of range for metadata area (size: "
-			"%" FMTllu " max: %" FMTllu ").",
-			ARGllu(locnSize), ARGllu(metadataSize - locnOffset));
-		err = EINVAL;
-		goto errOut;
-	}
-	else if(locnSize > SIZE_MAX) {
-		LogError("locnSize out of range (%" FMTllu ").",
-			ARGllu(locnSize));
-		err = EINVAL;
-		goto errOut;
-	}
-	else if(mediaBlockSize > SIZE_MAX) {
-		LogError("mediaBlockSize out of range (%" FMTllu ").",
-			ARGllu(mediaBlockSize));
-		err = EINVAL;
-		goto errOut;
-	}
-
-	textBufferInset = (size_t) (locnOffset % mediaBlockSize);
-	LogDebug("textBufferInset = %" FMTzu, ARGzu(textBufferInset));
-
-	textBufferSize =
-		(size_t) IORound(textBufferInset + locnSize, mediaBlockSize);
-	LogDebug("textBufferSize = %" FMTzu, ARGzu(textBufferSize));
-
-	err = lvm2_io_buffer_create(textBufferSize, &textBuffer);
-	if(err) {
-		LogError("Error while allocating %" FMTzu " bytes of memory "
-			"for 'textBuffer': %d", ARGzu(textBuffer), err);
-		goto errOut;
-	}
-
-	readOffset = metadataOffset + (locnOffset - textBufferInset);
-	LogDebug("readOffset = %" FMTllu, ARGllu(readOffset));
-
-	err = lvm2_device_read(dev, readOffset, textBufferSize, textBuffer);
-	if(err) {
-		LogError("Error %d while reading LVM2 text.", err);
-		goto errOut;
-	}
-
-	text = &((char*) lvm2_io_buffer_get_bytes(textBuffer))[textBufferInset];
-	textLen = (size_t) locnSize;
-
-	//LogDebug("LVM2 text: %.*s", textLen, text);
-
-	if(!lvm2_parse_text(text, textLen, &parseResult)) {
-		LogError("Error while parsing text.");
-		err = EIO;
-		goto errOut;
-	}
-
-	err = lvm2_layout_create(parseResult, &layout);
-	if(err) {
-		LogError("Error while converting parsed result into structured "
-			"data: %d", err);
-		goto errOut;
-	}
-
-	lvm2_dom_section_destroy(&parseResult, LVM2_TRUE);
-
-	*outLayout = layout;
-cleanup:
-	if(parseResult)
-		lvm2_dom_section_destroy(&parseResult, LVM2_TRUE);
-	if(textBuffer)
-		lvm2_io_buffer_destroy(&textBuffer);
-
-	return err;
-errOut:
-	if(!err) {
-		LogError("Warning: At errOut, but err not set. Setting default "
-			"errno value (EIO).");
-		err = EIO;
-	}
-
-	goto cleanup;
-}
-
 OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 {
 	struct lvm2_io_buffer *buffer = NULL;
@@ -776,7 +654,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
 				continue;
 			}
 
-			err = readLVM2Text(dev, meta_offset, meta_size,
+			err = lvm2_read_text(dev, meta_offset, meta_size,
 				&mdaHeader->raw_locns[0], &layout);
 			if(err) {
 				LogDebug("Error while reading LVM2 text: %d",
