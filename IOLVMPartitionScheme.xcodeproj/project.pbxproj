@@ -23,6 +23,7 @@
 
 /* Begin PBXBuildFile section */
 		03735E5E152D54B10074BEE6 /* lvm2_device.h in Headers */ = {isa = PBXBuildFile; fileRef = 03735E5D152D54B10074BEE6 /* lvm2_device.h */; };
+		037360BD152EFA930074BEE6 /* lvm2_endians.h in Headers */ = {isa = PBXBuildFile; fileRef = 037360BC152EFA930074BEE6 /* lvm2_endians.h */; };
 		0373F6971519973200713D63 /* lvm2_text.h in Headers */ = {isa = PBXBuildFile; fileRef = 0373F6951519973200713D63 /* lvm2_text.h */; };
 		0373F6981519973200713D63 /* lvm2_text.c in Sources */ = {isa = PBXBuildFile; fileRef = 0373F6961519973200713D63 /* lvm2_text.c */; };
 		0373F69D15199B1F00713D63 /* lvm2_types.h in Headers */ = {isa = PBXBuildFile; fileRef = 0373F69C15199B1F00713D63 /* lvm2_types.h */; };
@@ -59,6 +60,7 @@
 
 /* Begin PBXFileReference section */
 		03735E5D152D54B10074BEE6 /* lvm2_device.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lvm2_device.h; path = include/tlvm/lvm2_device.h; sourceTree = "<group>"; };
+		037360BC152EFA930074BEE6 /* lvm2_endians.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lvm2_endians.h; path = include/tlvm/lvm2_endians.h; sourceTree = "<group>"; };
 		0373F6951519973200713D63 /* lvm2_text.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lvm2_text.h; path = include/tlvm/lvm2_text.h; sourceTree = "<group>"; };
 		0373F6961519973200713D63 /* lvm2_text.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = lvm2_text.c; path = libtlvm/lvm2_text.c; sourceTree = "<group>"; };
 		0373F69C15199B1F00713D63 /* lvm2_types.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lvm2_types.h; path = include/tlvm/lvm2_types.h; sourceTree = "<group>"; };
@@ -111,6 +113,7 @@
 			isa = PBXGroup;
 			children = (
 				03735E5D152D54B10074BEE6 /* lvm2_device.h */,
+				037360BC152EFA930074BEE6 /* lvm2_endians.h */,
 				03AED6391517A2F500858A3A /* lvm2_layout.h */,
 				0373F7631519B83800713D63 /* lvm2_log.h */,
 				0373F6F21519A31100713D63 /* lvm2_osal.h */,
@@ -179,6 +182,7 @@
 				0373F7AD1519C8D800713D63 /* lvm2_osal_iokit.h in Headers */,
 				0373F7AF1519C94B00713D63 /* lvm2_osal_unix.h in Headers */,
 				03735E5E152D54B10074BEE6 /* lvm2_device.h in Headers */,
+				037360BD152EFA930074BEE6 /* lvm2_endians.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
