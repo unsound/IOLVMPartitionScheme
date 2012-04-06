@@ -173,8 +173,8 @@ __private_extern__ int lvm2_device_read(struct lvm2_device *const dev,
 		return ERANGE;
 
 	lead_in = (u32) (in_pos % dev->block_size);
-	lead_out = dev->block_size -
-		(u32) ((lead_in + in_count) % dev->block_size);
+	lead_out = (dev->block_size - (u32) ((lead_in + in_count) %
+		dev->block_size)) % dev->block_size;
 
 	if(lead_in != 0 || lead_out != 0 ||
 		in_count != in_buf->buffer->getLength())
