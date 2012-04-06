@@ -16,6 +16,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#if !defined(_LIBTLVM_LVM2_TEXT_H)
+#define _LIBTLVM_LVM2_TEXT_H
+
 #include "lvm2_types.h"
 
 #ifdef __cplusplus
@@ -179,3 +182,5 @@ void lvm2_layout_destroy(struct lvm2_layout **parsed_text);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* !defined(_LIBTLVM_LVM2_TEXT_H) */
