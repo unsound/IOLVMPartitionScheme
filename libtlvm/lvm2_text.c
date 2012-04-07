@@ -3104,8 +3104,10 @@ LVM2_EXPORT int lvm2_read_text(struct lvm2_device *dev,
 
 	const u64 locn_offset = le64_to_cpu(locn->offset);
 	const u64 locn_size = le64_to_cpu(locn->size);
-	const u32 locn_checksum = le32_to_cpu(locn->checksum);
-	const u32 locn_filler = le32_to_cpu(locn->filler);
+	const u32 locn_checksum __attribute__((unused)) =
+		le32_to_cpu(locn->checksum);
+	const u32 locn_filler __attribute__((unused)) =
+		le32_to_cpu(locn->filler);
 
 	int err = EIO;
 
