@@ -65,26 +65,6 @@ protected:
 
 	virtual OSSet* scan(SInt32 *score);
 
-	/*
-	 * Instantiate a new media object to represent the given partition.
-	 */
-
-	virtual IOMedia* instantiateMediaObject(
-		int partitionNumber,
-		UInt64 formattedLVMSize,
-		const char *partitionName,
-		UInt64 partitionBase,
-		UInt64 partitionSize);
-
-	/*
-	 * Allocate a new media object (called from instantiateMediaObject).
-	 */
-
-	virtual IOMedia* instantiateDesiredMediaObject(
-		/*int partitionNumber,
-		UInt64 formattedLVMSize,
-		const disk_locn *partition*/);
-
 #ifndef __LP64__
 	/*
 	 * Attach the given media object to the device tree plane.

@@ -27,6 +27,8 @@
 
 #define LogTrace(...)
 
+static const struct raw_locn null_raw_locn = { 0, 0, 0, 0 };
+
 LVM2_EXPORT u32 lvm2_calc_crc(u32 initial, const void *buf, size_t size)
 {
 	static const u32 crctab[] = {
@@ -3221,6 +3223,594 @@ err_out:
 			"default errno value (EIO).");
 		err = EIO;
 	}
+
+	goto cleanup;
+}
+
+LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
+		lvm2_bool (*const volume_callback)(void *private_data,
+			u64 device_size, const char *volume_name,
+			u64 volume_start, u64 volume_length),
+		void *const private_data)
+{
+	const u64 media_block_size = lvm2_device_get_alignment(dev);
+
+	int err;
+	struct lvm2_io_buffer *buffer = NULL;
+	struct lvm2_io_buffer *secondary_buffer = NULL;
+	u64 read_offset = 0;
+	size_t buffer_size = 0;
+	size_t secondary_buffer_size = 0;
+	u32 i;
+	s32 firstLabel = -1;
+	lvm2_bool manual_break = LVM2_FALSE;
+
+	LogDebug("%s: Entering with dev=%p.", __FUNCTION__, dev);
+
+	if(media_block_size > SIZE_MAX) {
+		LogError("Unrealistic media block size: %" FMTllu,
+			ARGllu(media_block_size));
+		goto out_err;
+	}
+
+	/* Allocate a suitably sized buffer. */
+
+	buffer_size = (size_t) AlignSize(LVM_SECTOR_SIZE, media_block_size);
+	err = lvm2_io_buffer_create(buffer_size, &buffer);
+	if(err) {
+		LogError("Error while allocating 'buffer' (%" FMTzu " bytes).",
+			ARGzu(buffer_size));
+		goto out_err;
+	}
+
+	LogDebug("\tAllocated 'buffer': %" FMTzu " bytes",
+		ARGzu(buffer_size));
+
+	secondary_buffer_size =
+		(size_t) AlignSize(LVM_MDA_HEADER_SIZE, media_block_size);
+	err = lvm2_io_buffer_create(secondary_buffer_size, &secondary_buffer);
+	if(err) {
+		LogError("Error while allocating 'secondary_buffer' "
+			"(%" FMTzu "bytes).",
+			ARGzu(secondary_buffer_size));
+		goto out_err;
+	}
+
+	LogDebug("\tAllocated 'secondary_buffer': %" FMTzu " bytes",
+		ARGzu(secondary_buffer_size));
+
+	/* Open the media with read-only access. */
+
+	LogDebug("\tMedia is open.");
+
+	for(i = 0; i < LVM_LABEL_SCAN_SECTORS; ++i) {
+		const struct label_header *labelHeader;
+		u64 labelSector;
+		u32 labelCrc;
+		u32 calculatedCrc;
+
+		read_offset = i * LVM_SECTOR_SIZE;
+
+		LogDebug("Searching for LVM label at sector %" FMTlu "...",
+			ARGlu(i));
+
+		err = lvm2_device_read(dev, read_offset, buffer_size, buffer);
+		if(err) {
+			LogError("Error while reading sector %" FMTlu ".",
+				ARGlu(i));
+			goto out_err;
+		}
+
+		labelHeader = (const struct label_header*)
+			lvm2_io_buffer_get_bytes(buffer);
+
+		LogDebug("\tlabel_header = {");
+		LogDebug("\t\t.id = '%.*s'", 8, labelHeader->id);
+		LogDebug("\t\t.sector_xl = %" FMTllu,
+			ARGllu(le64_to_cpu(labelHeader->sector_xl)));
+		LogDebug("\t\t.crc_xl = 0x%08" FMTlX,
+			ARGlX(le32_to_cpu(labelHeader->crc_xl)));
+		LogDebug("\t\t.offset_xl = %" FMTlu,
+			ARGlu(le32_to_cpu(labelHeader->offset_xl)));
+		LogDebug("\t\t.type = '%.*s'", 8, labelHeader->type);
+		LogDebug("\t}");
+
+		if(memcmp(labelHeader->id, "LABELONE", 8)) {
+			LogDebug("\t'id' magic does not match.");
+			continue;
+		}
+
+		labelSector = le64_to_cpu(labelHeader->sector_xl);
+		if(labelSector != i) {
+			LogError("'sector_xl' does not match actual sector "
+				"(%" FMTllu " != %" FMTlu ").",
+				ARGllu(labelSector), ARGlu(i));
+			continue;
+		}
+
+		labelCrc = le32_to_cpu(labelHeader->crc_xl);
+		calculatedCrc = lvm2_calc_crc(LVM_INITIAL_CRC,
+			&labelHeader->offset_xl, LVM_SECTOR_SIZE -
+			offsetof(struct label_header, offset_xl));
+		if(labelCrc != calculatedCrc) {
+			LogError("Stored and calculated CRC32 checksums don't "
+				"match (0x%08" FMTlX " != 0x%08" FMTlX ").",
+				ARGlX(labelCrc), ARGlX(calculatedCrc));
+			continue;
+		}
+
+		if(firstLabel == -1) {
+			firstLabel = i;
+		}
+		else {
+			LogError("Ignoring additional label at sector %" FMTlu,
+				ARGlu(i));
+		}
+	}
+
+	if(firstLabel < 0) {
+		LogDebug("No LVM label found on volume.");
+		goto out_err;
+	}
+
+	{
+		const void *sectorBytes;
+		const struct label_header *labelHeader;
+		const struct pv_header *pvHeader;
+
+		u64 labelSector;
+		u32 labelCrc;
+		u32 calculatedCrc;
+		u32 contentOffset;
+
+		u64 deviceSize;
+
+		u32 disk_areas_idx;
+		size_t dataAreasLength;
+		size_t metadataAreasLength;
+
+		struct lvm2_layout *layout = NULL;
+
+		read_offset = firstLabel * LVM_SECTOR_SIZE;
+
+		err = lvm2_device_read(dev, read_offset, buffer_size, buffer);
+		if(err) {
+			LogError("\tError while reading label sector "
+				"%" FMTlu ": %d",
+				ARGlu(i), err);
+			goto out_err;
+		}
+
+		sectorBytes = lvm2_io_buffer_get_bytes(buffer);
+		labelHeader = (const struct label_header*) sectorBytes;
+
+		/* Re-verify label fields. If the first three don't verify we
+		 * have a very strange situation, indicated with the tag
+		 * 'Unexpected:' before the error messages. */
+		if(memcmp(labelHeader->id, "LABELONE", 8)) {
+			LogError("Unexpected: 'id' magic does not match.");
+			goto out_err;
+		}
+
+		labelSector = le64_to_cpu(labelHeader->sector_xl);
+		if(labelSector != (u32) firstLabel) {
+			LogError("Unexpected: 'sector_xl' does not match "
+				 "actual sector (%" FMTllu " != %" FMTlu ").",
+				 ARGllu(labelSector), ARGlu(firstLabel));
+			goto out_err;
+		}
+
+		labelCrc = le32_to_cpu(labelHeader->crc_xl);
+		calculatedCrc = lvm2_calc_crc(LVM_INITIAL_CRC,
+			&labelHeader->offset_xl, LVM_SECTOR_SIZE -
+			offsetof(struct label_header, offset_xl));
+		if(labelCrc != calculatedCrc) {
+			LogError("Unexpected: Stored and calculated CRC32 "
+				 "checksums don't match (0x%08" FMTlX " "
+				 "!= 0x%08" FMTlX ").",
+				 ARGlx(labelCrc), ARGlX(calculatedCrc));
+			goto out_err;
+		}
+
+		contentOffset = le32_to_cpu(labelHeader->offset_xl);
+		if(contentOffset < sizeof(struct label_header)) {
+			LogError("Content overlaps header (content offset: "
+				 "%" FMTlu ").", ARGlu(contentOffset));
+			goto out_err;
+		}
+
+		if(memcmp(labelHeader->type, LVM_LVM2_LABEL, 8)) {
+			LogError("Unsupported label type: '%.*s'.",
+				8, labelHeader->type);
+			goto out_err;
+		}
+
+		pvHeader = (struct pv_header*)
+			&((char*) sectorBytes)[contentOffset];
+
+		disk_areas_idx = 0;
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0) {
+			const uintptr_t ptrDiff = (uintptr_t)
+				&pvHeader->disk_areas_xl[disk_areas_idx] -
+				(uintptr_t) sectorBytes;
+
+			if(ptrDiff > buffer_size) {
+				LogError("Data areas overflow into the next "
+					"sector (index %" FMTzu ").",
+					ARGzu(disk_areas_idx));
+				goto out_err;
+			}
+
+			++disk_areas_idx;
+		}
+		dataAreasLength = disk_areas_idx;
+		++disk_areas_idx;
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0) {
+			const uintptr_t ptrDiff = (uintptr_t)
+				&pvHeader->disk_areas_xl[disk_areas_idx] -
+				(uintptr_t) sectorBytes;
+
+			if(ptrDiff > buffer_size) {
+				LogError("Metadata areas overflow into the "
+					"next sector (index %" FMTzu ").",
+					ARGzu(disk_areas_idx));
+				goto out_err;
+			}
+
+			++disk_areas_idx;
+		}
+		metadataAreasLength = disk_areas_idx - (dataAreasLength + 1);
+
+		if(dataAreasLength != metadataAreasLength) {
+			LogError("Size mismatch between PV data and metadata "
+				"areas (%" FMTzu " != %" FMTzu ").",
+				ARGzu(dataAreasLength),
+				ARGzu(metadataAreasLength));
+			goto out_err;
+		}
+
+#if defined(DEBUG)
+		LogDebug("\tpvHeader = {");
+		LogDebug("\t\tpv_uuid = '%.*s'", LVM_ID_LEN, pvHeader->pv_uuid);
+		LogDebug("\t\tdevice_size_xl = %" FMTllu,
+			ARGllu(le64_to_cpu(pvHeader->device_size_xl)));
+		LogDebug("\t\tdisk_areas_xl = {");
+		LogDebug("\t\t\tdata_areas = {");
+		disk_areas_idx = 0;
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0 &&
+			disk_areas_idx < dataAreasLength)
+		{
+			LogDebug("\t\t\t\t{");
+			LogDebug("\t\t\t\t\toffset = %" FMTllu,
+				ARGllu(le64_to_cpu(pvHeader->
+				disk_areas_xl[disk_areas_idx].offset)));
+			LogDebug("\t\t\t\t\tsize = %" FMTllu,
+				ARGllu(le64_to_cpu(pvHeader->
+				disk_areas_xl[disk_areas_idx].size)));
+			LogDebug("\t\t\t\t}");
+
+			++disk_areas_idx;
+		}
+		LogDebug("\t\t\t}");
+		++disk_areas_idx;
+		LogDebug("\t\t\tmetadata_areas = {");
+		while(pvHeader->disk_areas_xl[disk_areas_idx].offset != 0 &&
+			disk_areas_idx < (dataAreasLength + 1 +
+			metadataAreasLength))
+		{
+			LogDebug("\t\t\t\t{");
+			LogDebug("\t\t\t\t\toffset = %" FMTllu,
+				ARGllu(le64_to_cpu(pvHeader->
+				disk_areas_xl[disk_areas_idx].offset)));
+			LogDebug("\t\t\t\t\tsize = %" FMTllu,
+				ARGllu(le64_to_cpu(pvHeader->
+				disk_areas_xl[disk_areas_idx].size)));
+			LogDebug("\t\t\t\t}");
+
+			++disk_areas_idx;
+		}
+		LogDebug("\t\t\t}");
+		LogDebug("\t\t}");
+		LogDebug("\t}");
+#endif /* defined(DEBUG) */
+
+		deviceSize = le64_to_cpu(pvHeader->device_size_xl);
+		disk_areas_idx = 0;
+		while(!manual_break &&
+			pvHeader->disk_areas_xl[disk_areas_idx].offset != 0)
+		{
+			const struct disk_locn *locn;
+			const struct disk_locn *meta_locn;
+			u64 meta_offset;
+			u64 meta_size;
+
+			const struct mda_header *mdaHeader;
+			u32 mda_checksum;
+			u32 mda_version;
+			u64 mda_start;
+			u64 mda_size;
+
+			u32 mda_calculated_checksum;
+
+			if(disk_areas_idx >= dataAreasLength) {
+				LogError("Overflow when iterating through disk "
+					"areas (%" FMTzu " >= %" FMTzu ").",
+					ARGzu(disk_areas_idx),
+					ARGzu(dataAreasLength));
+				goto out_err;
+			}
+
+			locn = &pvHeader->disk_areas_xl[disk_areas_idx];
+			meta_locn = &pvHeader->disk_areas_xl[dataAreasLength +
+				1 + disk_areas_idx];
+
+			meta_offset = le64_to_cpu(meta_locn->offset);
+			meta_size = le64_to_cpu(meta_locn->size);
+
+			err = lvm2_device_read(dev, meta_offset,
+				secondary_buffer_size, secondary_buffer);
+			if(err) {
+				LogError("Error while reading first metadata "
+					"sector of PV number %" FMTlu " "
+					"(offset %" FMTzu " bytes): %d",
+					ARGlu(disk_areas_idx),
+					ARGzu(meta_offset), err);
+				goto out_err;
+			}
+
+			mdaHeader = (const struct mda_header*)
+				lvm2_io_buffer_get_bytes(secondary_buffer);
+
+#if defined(DEBUG)
+			LogDebug("mdaHeader[%" FMTlu "] = {",
+				ARGlu(disk_areas_idx));
+			LogDebug("\tchecksum_xl = 0x%08" FMTlX,
+				ARGlX(le32_to_cpu(mdaHeader->checksum_xl)));
+			LogDebug("\tmagic = '%.*s'", 16, mdaHeader->magic);
+			LogDebug("\tversion = %" FMTlu,
+				ARGlu(le32_to_cpu(mdaHeader->version)));
+			LogDebug("\tstart = %" FMTllu,
+				ARGllu(le64_to_cpu(mdaHeader->start)));
+			LogDebug("\tsize = %" FMTllu,
+				ARGllu(le64_to_cpu(mdaHeader->size)));
+			LogDebug("\traw_locns = {");
+			{
+				size_t raw_locns_idx = 0;
+
+				while(memcmp(&null_raw_locn,
+					&mdaHeader->raw_locns[raw_locns_idx],
+					sizeof(struct raw_locn)) != 0)
+				{
+					const struct raw_locn *const cur_locn =
+						&mdaHeader->
+						raw_locns[raw_locns_idx];
+
+					LogDebug("\t\t[%" FMTllu "] = {",
+						ARGllu(raw_locns_idx));
+					LogDebug("\t\t\toffset = %" FMTllu,
+						ARGllu(le64_to_cpu(
+						cur_locn->offset)));
+					LogDebug("\t\t\tsize = %" FMTllu,
+						ARGllu(le64_to_cpu(
+						cur_locn->size)));
+					LogDebug("\t\t\tchecksum = 0x%08" FMTlX,
+						ARGlX(le32_to_cpu(
+						cur_locn->checksum)));
+					LogDebug("\t\t\tfiller = %" FMTlu,
+						ARGlu(le32_to_cpu(
+						cur_locn->filler)));
+					LogDebug("\t\t}");
+
+					++raw_locns_idx;
+				}
+			}
+			LogDebug("\t}");
+			LogDebug("}");
+#endif /* defined(DEBUG) */
+
+			mda_checksum = le32_to_cpu(mdaHeader->checksum_xl);
+			mda_version = le32_to_cpu(mdaHeader->version);
+			mda_start = le64_to_cpu(mdaHeader->start);
+			mda_size = le64_to_cpu(mdaHeader->size);
+
+			mda_calculated_checksum = lvm2_calc_crc(LVM_INITIAL_CRC,
+				mdaHeader->magic, LVM_MDA_HEADER_SIZE -
+				offsetof(struct mda_header, magic));
+			if(mda_calculated_checksum != mda_checksum) {
+				LogError("mda_header checksum mismatch "
+					"(calculated: 0x%" FMTlX " expected: "
+					"0x%" FMTlX ").",
+					ARGlX(mda_calculated_checksum),
+					ARGlX(mda_checksum));
+				continue;
+			}
+
+			if(mda_version != 1) {
+				LogError("Unsupported mda_version: %" FMTlu,
+					ARGlu(mda_version));
+				continue;
+			}
+
+			if(mda_start != meta_offset) {
+				LogError("mda_start does not match metadata "
+					"offset (%" FMTllu " != %" FMTllu ").",
+					ARGllu(mda_start), ARGllu(meta_offset));
+				continue;
+			}
+
+			if(mda_size != meta_size) {
+				LogError("mda_size does not match metadata "
+					"size (%" FMTllu " != %" FMTllu ").",
+					ARGllu(mda_size), ARGllu(meta_size));
+				continue;
+			}
+
+			if(memcmp(&mdaHeader->raw_locns[0], &null_raw_locn,
+				sizeof(struct raw_locn)) == 0)
+			{
+				LogError("Missing first raw_locn.");
+				continue;
+			}
+			else if(memcmp(&mdaHeader->raw_locns[1], &null_raw_locn,
+				sizeof(struct raw_locn)) != 0)
+			{
+				LogError("Found more than one raw_locn "
+					"(currently unsupported).");
+				continue;
+			}
+
+			err = lvm2_read_text(dev, meta_offset, meta_size,
+				&mdaHeader->raw_locns[0], &layout);
+			if(err) {
+				LogDebug("Error while reading LVM2 text: %d",
+					err);
+				continue;
+			}
+
+			LogDebug("Successfully read LVM2 text.");
+
+			{
+				size_t j;
+				const struct lvm2_physical_volume *match = NULL;
+
+				for(j = 0; j < layout->vg->physical_volumes_len;
+					++j)
+				{
+					const char *const our_uuid =
+						(char*) pvHeader->pv_uuid;
+					const struct lvm2_physical_volume *const
+						pv =
+						layout->vg->physical_volumes[j];
+
+					if(pv->id->length != 38) {
+						LogError("Invalid id length %d",
+							pv->id->length);
+						continue;
+					}
+
+					if(!strncmp(&pv->id->content[0],
+						&our_uuid[0], 6) &&
+						pv->id->content[6] == '-' &&
+						!strncmp(&pv->id->content[7],
+						&our_uuid[6], 4) &&
+						pv->id->content[11] == '-' &&
+						!strncmp(&pv->id->content[12],
+						&our_uuid[10], 4) &&
+						pv->id->content[16] == '-' &&
+						!strncmp(&pv->id->content[17],
+						&our_uuid[14], 4) &&
+						pv->id->content[21] == '-' &&
+						!strncmp(&pv->id->content[22],
+						&our_uuid[18], 4) &&
+						pv->id->content[26] == '-' &&
+						!strncmp(&pv->id->content[27],
+						&our_uuid[22], 4) &&
+						pv->id->content[31] == '-' &&
+						!strncmp(&pv->id->content[32],
+						&our_uuid[26], 6))
+					{
+						LogDebug("Found physical "
+							"volume: '%.*s'",
+							pv->name->length,
+							pv->name->content);
+						match = pv;
+						break;
+					}
+				}
+
+				if(!match) {
+					LogError("No physical volume match "
+						"found in LVM2 database.");
+				}
+				else for(j = 0;
+					j < layout->vg->logical_volumes_len;
+					++j)
+				{
+					const struct lvm2_logical_volume *const
+						lv =
+						layout->vg->logical_volumes[j];
+					const struct lvm2_bounded_string
+						*pv_name;
+					u64 partitionStart;
+					u64 partitionLength;
+
+					if(lv->segment_count != 1) {
+						LogError("More than one "
+							"segment is "
+							"unsupported.");
+						continue;
+					}
+
+					if(lv->segments[0]->stripes_len != 1) {
+						LogError("More than one stripe "
+							"is unsupported.");
+						continue;
+					}
+
+					pv_name = lv->segments[0]->stripes[0]->
+						pv_name;
+
+					if(pv_name->length !=
+						match->name->length ||
+						strncmp(pv_name->content,
+						match->name->content,
+						pv_name->length) != 0)
+					{
+						LogError("Physical volume name "
+							"mismatch: \"%.*s\" != "
+							"\"%.*s\"",
+							pv_name->length,
+							pv_name->content,
+							match->name->length,
+							match->name->content);
+						continue;
+					}
+
+					partitionStart = (match->pe_start +
+						lv->segments[0]->stripes[0]->
+						extent_start *
+						layout->vg->extent_size) *
+						media_block_size /* 512? */;
+					LogDebug("partitionStart: %" FMTllu,
+						ARGllu(partitionStart));
+
+					partitionLength =
+						lv->segments[0]->extent_count *
+						layout->vg->extent_size *
+						media_block_size /* 512? */;
+
+					LogDebug("partitionLength: %" FMTllu,
+						ARGllu(partitionLength));
+
+					if(!volume_callback(private_data,
+						deviceSize, lv->name->content,
+						partitionStart,
+						partitionLength))
+					{
+						manual_break = LVM2_TRUE;
+						break;
+					}
+				}
+
+				lvm2_layout_destroy(&layout);
+			}
+
+			++disk_areas_idx;
+		}
+	}
+
+cleanup:
+	/* Release our resources. */
+
+	if(secondary_buffer)
+		lvm2_io_buffer_destroy(&secondary_buffer);
+	if(buffer)
+		lvm2_io_buffer_destroy(&buffer);
+
+	return err;
+out_err:
+	if(!err)
+		err = EIO;
 
 	goto cleanup;
 }

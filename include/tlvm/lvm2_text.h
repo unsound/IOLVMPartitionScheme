@@ -185,6 +185,12 @@ int lvm2_read_text(struct lvm2_device *dev, u64 metadata_offset,
 		u64 metadata_size, const struct raw_locn *locn,
 		struct lvm2_layout **out_layout);
 
+int lvm2_parse_device(struct lvm2_device *dev,
+		lvm2_bool (*volume_callback)(void *private_data,
+			u64 device_size, const char *volume_name,
+			u64 volume_start, u64 volume_length),
+		void *private_data);
+
 #ifdef __cplusplus
 }
 #endif
