@@ -34,7 +34,7 @@ extern "C" {
 #define LVM_LABEL_SCAN_SECTORS  4U
 
 /* Declaration from: lib/misc/crc.h */
-#define LVM_INITIAL_CRC         0xf597a6cfUL
+#define LVM_INITIAL_CRC         0xf597a6cfU
 
 /* Declaration from: lib/format_text/layout.h */
 #define LVM_LVM2_LABEL          "LVM2 001"
