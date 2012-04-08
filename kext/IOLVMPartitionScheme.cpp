@@ -174,7 +174,8 @@ void IOLVMPartitionScheme::stop(IOService* provider)
 /**
  * "Request that the provider media be re-scanned for partitions."
  */
-IOReturn IOLVMPartitionScheme::requestProbe(IOOptionBits options)
+IOReturn IOLVMPartitionScheme::requestProbe(
+		IOOptionBits options __attribute__((unused)))
 {
 	OSSet *partitions = NULL;
 	OSSet *partitionsNew;
@@ -242,7 +243,7 @@ static lvm2_bool volumeCallback(void *const privateData, const u64 deviceSize,
 	}
 }
 
-OSSet* IOLVMPartitionScheme::scan(SInt32 *score)
+OSSet* IOLVMPartitionScheme::scan(SInt32 *score __attribute__((unused)))
 {
 	IOMedia *const media = getProvider();
 
