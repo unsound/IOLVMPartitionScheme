@@ -36,6 +36,7 @@
 		0373F7AD1519C8D800713D63 /* lvm2_osal_iokit.h in Headers */ = {isa = PBXBuildFile; fileRef = 0373F7AC1519C8D800713D63 /* lvm2_osal_iokit.h */; };
 		0373F7AF1519C94B00713D63 /* lvm2_osal_unix.h in Headers */ = {isa = PBXBuildFile; fileRef = 0373F7AE1519C94B00713D63 /* lvm2_osal_unix.h */; };
 		03AED63A1517A2F500858A3A /* lvm2_layout.h in Headers */ = {isa = PBXBuildFile; fileRef = 03AED6391517A2F500858A3A /* lvm2_layout.h */; };
+		03E1EC5815302AB3005EAF8A /* kext_main.c in Sources */ = {isa = PBXBuildFile; fileRef = 03E1EC5615302AB3005EAF8A /* kext_main.c */; };
 		32D94FC60562CBF700B6AF17 /* IOLVMPartitionScheme.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A224C3EFF42367911CA2CB7 /* IOLVMPartitionScheme.h */; };
 		32D94FC80562CBF700B6AF17 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C167DFE841241C02AAC07 /* InfoPlist.strings */; };
 		32D94FCA0562CBF700B6AF17 /* IOLVMPartitionScheme.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1A224C3FFF42367911CA2CB7 /* IOLVMPartitionScheme.cpp */; settings = {ATTRIBUTES = (); }; };
@@ -73,6 +74,7 @@
 		0373F7AC1519C8D800713D63 /* lvm2_osal_iokit.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lvm2_osal_iokit.h; path = kext/lvm2_osal_iokit.h; sourceTree = "<group>"; };
 		0373F7AE1519C94B00713D63 /* lvm2_osal_unix.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lvm2_osal_unix.h; path = test/lvm2_osal_unix.h; sourceTree = "<group>"; };
 		03AED6391517A2F500858A3A /* lvm2_layout.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lvm2_layout.h; path = include/tlvm/lvm2_layout.h; sourceTree = "<group>"; };
+		03E1EC5615302AB3005EAF8A /* kext_main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = kext_main.c; path = kext/kext_main.c; sourceTree = "<group>"; };
 		089C167EFE841241C02AAC07 /* English */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; lineEnding = 0; name = English; path = English.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		1A224C3EFF42367911CA2CB7 /* IOLVMPartitionScheme.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = IOLVMPartitionScheme.h; path = kext/IOLVMPartitionScheme.h; sourceTree = "<group>"; };
 		1A224C3FFF42367911CA2CB7 /* IOLVMPartitionScheme.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IOLVMPartitionScheme.cpp; path = kext/IOLVMPartitionScheme.cpp; sourceTree = "<group>"; };
@@ -160,6 +162,7 @@
 			children = (
 				1A224C3EFF42367911CA2CB7 /* IOLVMPartitionScheme.h */,
 				1A224C3FFF42367911CA2CB7 /* IOLVMPartitionScheme.cpp */,
+				03E1EC5615302AB3005EAF8A /* kext_main.c */,
 				0373F7AC1519C8D800713D63 /* lvm2_osal_iokit.h */,
 				0373F6F31519A31100713D63 /* lvm2_osal_iokit.cpp */,
 			);
@@ -288,6 +291,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				32D94FCA0562CBF700B6AF17 /* IOLVMPartitionScheme.cpp in Sources */,
+				03E1EC5815302AB3005EAF8A /* kext_main.c in Sources */,
 				0373F6981519973200713D63 /* lvm2_text.c in Sources */,
 				0373F6F51519A31100713D63 /* lvm2_osal_iokit.cpp in Sources */,
 			);
@@ -372,6 +376,8 @@
 				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
 				"MACOSX_DEPLOYMENT_TARGET[arch=x86_64]" = 10.6;
 				MODULE_NAME = org.catacombae.iokit.IOLVMPartitionScheme;
+				MODULE_START = IOLVMPartitionScheme_start;
+				MODULE_STOP = IOLVMPartitionScheme_stop;
 				MODULE_VERSION = 1.0.0d1;
 				PRODUCT_NAME = IOLVMPartitionScheme;
 				"SDKROOT[arch=x86_64]" = macosx10.6;
@@ -443,6 +449,8 @@
 				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
 				"MACOSX_DEPLOYMENT_TARGET[arch=x86_64]" = 10.6;
 				MODULE_NAME = org.catacombae.iokit.IOLVMPartitionScheme;
+				MODULE_START = IOLVMPartitionScheme_start;
+				MODULE_STOP = IOLVMPartitionScheme_stop;
 				MODULE_VERSION = 1.0.0d1;
 				PRODUCT_NAME = IOLVMPartitionScheme;
 				"SDKROOT[arch=x86_64]" = macosx10.6;
@@ -561,6 +569,8 @@
 				INFOPLIST_PREPROCESS = YES;
 				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
 				MODULE_NAME = org.catacombae.iokit.IOLVMPartitionScheme;
+				MODULE_START = IOLVMPartitionScheme_start;
+				MODULE_STOP = IOLVMPartitionScheme_stop;
 				MODULE_VERSION = 1.0.0d1;
 				PRODUCT_NAME = IOLVMPartitionScheme;
 				WRAPPER_EXTENSION = kext;
@@ -578,6 +588,8 @@
 				INFOPLIST_PREPROCESS = YES;
 				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
 				MODULE_NAME = org.catacombae.iokit.IOLVMPartitionScheme;
+				MODULE_START = IOLVMPartitionScheme_start;
+				MODULE_STOP = IOLVMPartitionScheme_stop;
 				MODULE_VERSION = 1.0.0d1;
 				PRODUCT_NAME = IOLVMPartitionScheme;
 				WRAPPER_EXTENSION = kext;
