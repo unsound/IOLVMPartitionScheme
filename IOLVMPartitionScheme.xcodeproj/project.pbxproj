@@ -47,14 +47,14 @@
 			isa = PBXContainerItemProxy;
 			containerPortal = 089C1669FE841209C02AAC07 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 32D94FC30562CBF700B6AF17 /* IOLVMPartitionScheme */;
+			remoteGlobalIDString = 32D94FC30562CBF700B6AF17;
 			remoteInfo = IOLVMPartitionScheme;
 		};
 		03735EB7152D59E80074BEE6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 089C1669FE841209C02AAC07 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 0373F7431519B51900713D63 /* LVMTest */;
+			remoteGlobalIDString = 0373F7431519B51900713D63;
 			remoteInfo = LVMTest;
 		};
 /* End PBXContainerItemProxy section */
