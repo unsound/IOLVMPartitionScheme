@@ -139,6 +139,12 @@ int main(int argc, char **argv) {
 	int ret = (EXIT_FAILURE);
 	int fd;
 
+	if(!lvm2_check_layout()) {
+		fprintf(stderr, "Build error: Incorrect struct definitions.\n");
+		exit(EXIT_FAILURE);
+		return (EXIT_FAILURE);
+	}
+
 	if(argc != 2) {
 		fprintf(stderr, "usage: %s <file>\n",
 			argc ? argv[0] : "<null>");

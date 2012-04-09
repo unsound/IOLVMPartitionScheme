@@ -56,11 +56,14 @@ bool IOLVMPartitionScheme::init(OSDictionary *properties)
 	IOLog("%s: Initializing.\n", __PRETTY_FUNCTION__);
 
 	/* Verify that the compiler didn't mess with our struct definitions. */
-	assert(sizeof(struct label_header) == 32);
-
-	/* First call the init method of super to get a go-ahead. */
-	if(super::init(properties) == false)
+	if(!lvm2_check_layout()) {
+		LogError("Invalid layout of on-disk struct definitions.");
 		status = false;
+	}
+	else if(super::init(properties) == false) {
+		/* Call the init method of super to get a go-ahead. */
+		status = false;
+	}
 	else {
 		/* Initialize a minimal set of state variables. */
 		_partitions = NULL;

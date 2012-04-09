@@ -191,6 +191,8 @@ int lvm2_parse_device(struct lvm2_device *dev,
 			u64 volume_start, u64 volume_length),
 		void *private_data);
 
+lvm2_bool lvm2_check_layout(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -3814,3 +3814,55 @@ out_err:
 
 	goto cleanup;
 }
+
+LVM2_EXPORT lvm2_bool lvm2_check_layout()
+{
+	lvm2_bool res = LVM2_TRUE;
+
+	if(sizeof(struct label_header) != 32) {
+		LogError("Invalid size of struct label_header: %" FMTzu,
+			ARGzu(sizeof(struct label_header)));
+		res = LVM2_FALSE;
+	}
+	else {
+		/* TODO: Add assertions for individual field offsets. */
+	}
+
+	if(sizeof(struct disk_locn) != 16) {
+		LogError("Invalid size of struct disk_locn: %" FMTzu,
+			ARGzu(sizeof(struct disk_locn)));
+		res = LVM2_FALSE;
+	}
+	else {
+		/* TODO: Add assertions for individual field offsets. */
+	}
+
+	if(sizeof(struct pv_header) != 40) {
+		LogError("Invalid size of struct pv_header: %" FMTzu,
+			ARGzu(sizeof(struct pv_header)));
+		res = LVM2_FALSE;
+	}
+	else {
+		/* TODO: Add assertions for individual field offsets. */
+	}
+
+	if(sizeof(struct raw_locn) != 24) {
+		LogError("Invalid size of struct raw_locn: %" FMTzu,
+			ARGzu(sizeof(struct raw_locn)));
+		res = LVM2_FALSE;
+	}
+	else {
+		/* TODO: Add assertions for individual field offsets. */
+	}
+
+	if(sizeof(struct mda_header) != 40) {
+		LogError("Invalid size of struct mda_header: %" FMTzu,
+			ARGzu(sizeof(struct mda_header)));
+		res = LVM2_FALSE;
+	}
+	else {
+		/* TODO: Add assertions for individual field offsets. */
+	}
+
+	return res;
+}
