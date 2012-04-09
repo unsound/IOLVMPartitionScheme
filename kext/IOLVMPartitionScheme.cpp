@@ -28,14 +28,6 @@
 #include "lvm2_osal.h"
 #include "lvm2_text.h"
 
-//#define DEBUG
-
-#define le16_to_cpu OSSwapLittleToHostInt16
-#define le32_to_cpu OSSwapLittleToHostInt32
-#define le64_to_cpu OSSwapLittleToHostInt64
-
-static const struct raw_locn null_raw_locn = { 0, 0, 0, 0 };
-
 /*
  * Instantiate a new media object to represent the given partition.
  */
@@ -275,8 +267,6 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score __attribute__((unused)))
 
 	LogDebug("\tAllocated 'partitions'.");
 
-	/* Open the media with read-only access. */
-
 	err = lvm2_iokit_device_create(this, media, &dev);
 	if(err) {
 		LogError("Error while opening device: %d", err);
@@ -336,26 +326,6 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *obj,
 	if(partitionBase + partitionSize > media->getSize()) {
 		partitionSize = media->getSize() - partitionBase;
 	}
-
-#if 0
-	// Determine whether the new partition is read-only.
-	//
-	// Note that we treat the misspelt Apple_patition_map entries as
-	// equivalent to Apple_partition_map entries due to the messed up CDs
-	// noted in 2513960.
-
-	if(!strncmp(partition->dpme_type, "Apple_partition_map",
-			sizeof(partition->dpme_type)) ||
-		!strncmp(partition->dpme_type, "Apple_Partition_Map",
-			sizeof(partition->dpme_type)) ||
-		!strncmp(partition->dpme_type, "Apple_patition_map",
-			sizeof(partition->dpme_type)) ||
-		(OSSwapBigToHostInt32(partition->dpme_flags) &
-		(DPME_FLAGS_WRITABLE | DPME_FLAGS_VALID)) == DPME_FLAGS_VALID)
-	{
-		partitionIsWritable = false;
-	}
-#endif
 
 	// Create the new media object.
 

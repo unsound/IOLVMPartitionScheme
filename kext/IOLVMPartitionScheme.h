@@ -29,10 +29,6 @@
 
 #define kIOLVMPartitionSchemeClass "IOLVMPartitionScheme"
 
-#pragma pack(push, 1)                        /* (enable 8-bit struct packing) */
-
-#pragma pack(pop)                        /* (reset to default struct packing) */
-
 #ifdef KERNEL
 #ifdef __cplusplus
 
