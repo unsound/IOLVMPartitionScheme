@@ -45,8 +45,6 @@ bool IOLVMPartitionScheme::init(OSDictionary *properties)
 	LogDebug("%s: Entering with: properties=%p.",
 		__FUNCTION__, properties);
 
-	IOLog("%s: Initializing.\n", __PRETTY_FUNCTION__);
-
 	/* Verify that the compiler didn't mess with our struct definitions. */
 	if(!lvm2_check_layout()) {
 		LogError("Invalid layout of on-disk struct definitions.");
@@ -68,8 +66,6 @@ bool IOLVMPartitionScheme::init(OSDictionary *properties)
 void IOLVMPartitionScheme::free()
 {
 	LogDebug("%s: Entering.", __FUNCTION__);
-
-	IOLog("%s: Unloading.\n", LOG_CLASSNAME);
 
 	/* Clean up our state. */
 	if(_partitions)
