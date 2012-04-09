@@ -266,6 +266,11 @@ int lvm2_device_read(struct lvm2_device *const dev, const u64 in_pos,
 	size_t count;
 	void *buf;
 
+	LogDebug("%s: Entering with dev=%p in_pos=%" FMTllu " "
+		"in_count=%" FMTzu " in_buf=%p...",
+		__PRETTY_FUNCTION__, dev, ARGllu(in_pos), ARGzu(in_count),
+		in_buf);
+
 	if(in_pos > (u64) max_off_t)
 		return ERANGE;
 	if(in_count > in_buf->size || in_count > SSIZE_MAX)
