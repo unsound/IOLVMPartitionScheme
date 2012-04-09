@@ -248,7 +248,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score __attribute__((unused)))
 	/* Media must be formatted. */
 
 	if(media->isFormatted() == false)
-		goto scanErr;
+		goto err_out;
 
 	LogDebug("\tMedia is formatted.");
 
@@ -258,7 +258,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score __attribute__((unused)))
 	partitions = OSSet::withCapacity(8);
 	if(partitions == NULL) {
 		LogError("Error while allocating 'partitions'.");
-		goto scanErr;
+		goto err_out;
 	}
 
 	LogDebug("\tAllocated 'partitions'.");
@@ -266,7 +266,7 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score __attribute__((unused)))
 	err = lvm2_iokit_device_create(this, media, &dev);
 	if(err) {
 		LogError("Error while opening device: %d", err);
-		goto scanErr;
+		goto err_out;
 	}
 
 	ctx.obj = this;
@@ -276,25 +276,22 @@ OSSet* IOLVMPartitionScheme::scan(SInt32 *score __attribute__((unused)))
 	err = lvm2_parse_device(dev, volumeCallback, &ctx);
 	if(err) {
 		LogDebug("Error while parsing LVM2 structures: %d", err);
-		goto scanErr;
+		goto err_out;
 	}
 
-	// Release our resources.
-
-	lvm2_iokit_device_destroy(&dev);
+cleanup:
+	if(dev)
+		lvm2_iokit_device_destroy(&dev);
 
 	return partitions;
 
-scanErr:
-
-	// Release our resources.
-
-	if(dev)
-		lvm2_iokit_device_destroy(&dev);
-	if(partitions)
+err_out:
+	if(partitions) {
 		partitions->release();
+		partitions = NULL;
+	}
 
-	return NULL;
+	goto cleanup;
 }
 
 static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *obj,
