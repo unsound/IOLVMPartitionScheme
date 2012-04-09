@@ -311,6 +311,13 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 	const char *partitionHint;
 	IOMedia *newMedia;
 
+	LogDebug("Entering with obj=%p partitionNumber=%d "
+		"formattedLVMsize=%" FMTllu " paritionName=%p (%s) "
+		"partitionBase=%" FMTllu " partitionSize=%" FMTllu,
+		obj, partitionNumber, ARGllu(formattedLVMSize), partitionName,
+		partitionName ? partitionName : "<null>", ARGllu(partitionBase),
+		ARGllu(partitionSize));
+
 	partitionHint = "Linux";
 
 
@@ -318,6 +325,11 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 	// end-of-media.
 
 	if(partitionBase + partitionSize > media->getSize()) {
+		LogError("Warning: Specified partition extends past end of "
+			"media ((%" FMTllu " + %" FMTllu ") > %" FMTllu "). "
+			"Clipping...",
+			ARGllu(partitionBase), ARGllu(partitionSize),
+			ARGllu(media->getSize()));
 		partitionSize = media->getSize() - partitionBase;
 	}
 
