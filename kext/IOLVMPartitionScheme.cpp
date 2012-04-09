@@ -294,21 +294,22 @@ err_out:
 	goto cleanup;
 }
 
-static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *obj,
+static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 		const int partitionNumber,
 		const UInt64 formattedLVMSize __attribute__((unused)),
-		const char *partitionName,
+		const char *const partitionName,
 		const UInt64 partitionBase,
 		UInt64 partitionSize)
 {
 	//
 	// Instantiate a new media object to represent the given partition.
 	//
+	IOMedia *const media = obj->getProvider();
+	const bool partitionIsWritable = media->isWritable();
+	const UInt64 mediaBlockSize = media->getPreferredBlockSize();
 
-	IOMedia *media = obj->getProvider();
-	UInt64 mediaBlockSize = media->getPreferredBlockSize();
 	const char *partitionHint;
-	bool partitionIsWritable = media->isWritable();
+	IOMedia *newMedia;
 
 	partitionHint = "Linux";
 
@@ -322,8 +323,7 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *obj,
 
 	// Create the new media object.
 
-	IOMedia *newMedia = new IOMedia;
-
+	newMedia = new IOMedia;
 	if(newMedia) {
 		if(newMedia->init(
 			/* base               */ partitionBase,
