@@ -135,27 +135,15 @@ static void print_lvm2_layout(struct lvm2_layout *layout)
 
 #undef emit
 
-int main(int argc, char **argv) {
+static int read_text_main(const char *const device_name)
+{
 	int ret = (EXIT_FAILURE);
 	int fd;
 
-	if(!lvm2_check_layout()) {
-		fprintf(stderr, "Build error: Incorrect struct definitions.\n");
-		exit(EXIT_FAILURE);
-		return (EXIT_FAILURE);
-	}
-
-	if(argc != 2) {
-		fprintf(stderr, "usage: %s <file>\n",
-			argc ? argv[0] : "<null>");
-		exit(EXIT_FAILURE);
-		return (EXIT_FAILURE);
-	}
-
-	fd = open(argv[1], O_RDWR);
+	fd = open(device_name, O_RDWR);
 	if(fd == -1) {
 		LogError("Error while opening \"%s\": %d (%s)",
-			argv[1], errno, strerror(errno));
+			device_name, errno, strerror(errno));
 	}
 	else {
 		off_t tmp_file_size;
@@ -249,4 +237,71 @@ int main(int argc, char **argv) {
 	}
 
 	return ret;
+}
+
+static lvm2_bool volume_callback(
+		void *const private_data __attribute__((unused)),
+		const u64 device_size, const char *const volume_name,
+		const u64 volume_start, const u64 volume_length)
+{
+	static lvm2_bool device_size_printed = LVM2_FALSE;
+
+	if(!device_size_printed) {
+		fprintf(stdout, "Device size: %" FMTllu "\n",
+			ARGllu(device_size));
+	}
+
+	fprintf(stdout, "%s: [%" FMTllu "-%" FMTllu "]\n",
+		volume_name, ARGllu(volume_start),
+		ARGllu(volume_start + volume_length));
+
+	return LVM2_TRUE;
+}
+
+static int read_device_main(const char *const device_name)
+{
+	int ret = (EXIT_FAILURE);
+	int err;
+	struct lvm2_device *dev = NULL;
+
+	err = lvm2_unix_device_create(device_name, &dev);
+	if(err) {
+		LogError("Error while opening \"%s\": %d (%s)",
+			device_name, err, strerror(err));
+	}
+	else {
+		err = lvm2_parse_device(dev, &volume_callback, NULL);
+		if(err) {
+			LogError("Error while parsing LVM2 volume: %d (%s)",
+				err, strerror(err));
+		}
+		else {
+			ret = (EXIT_SUCCESS);
+		}
+
+		lvm2_unix_device_destroy(&dev);
+	}
+
+	return ret;
+}
+
+int main(int argc, char **argv)
+{
+	if(!lvm2_check_layout()) {
+		fprintf(stderr, "Build error: Incorrect struct definitions.\n");
+		exit(EXIT_FAILURE);
+		return (EXIT_FAILURE);
+	}
+
+	if(argc != 2) {
+		fprintf(stderr, "usage: %s <file>\n",
+			argc ? argv[0] : "<null>");
+		exit(EXIT_FAILURE);
+		return (EXIT_FAILURE);
+	}
+
+	if(1)
+		return read_device_main(argv[1]);
+	else
+		return read_text_main(argv[1]);
 }
