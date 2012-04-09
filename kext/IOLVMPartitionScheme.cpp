@@ -28,9 +28,8 @@
 #include "lvm2_osal.h"
 #include "lvm2_text.h"
 
-/*
- * Instantiate a new media object to represent the given partition.
- */
+/* Forward declarations. */
+
 static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *obj,
 	int partitionNumber, UInt64 formattedLVMSize, const char *partitionName,
 	UInt64 partitionBase, UInt64 partitionSize);
@@ -294,6 +293,9 @@ err_out:
 	goto cleanup;
 }
 
+/**
+ * Instantiate a new media object to represent an LVM partition.
+ */
 static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 		const int partitionNumber,
 		const UInt64 formattedLVMSize __attribute__((unused)),
@@ -301,9 +303,6 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 		const UInt64 partitionBase,
 		UInt64 partitionSize)
 {
-	//
-	// Instantiate a new media object to represent the given partition.
-	//
 	IOMedia *const media = obj->getProvider();
 	const bool partitionIsWritable = media->isWritable();
 	const UInt64 mediaBlockSize = media->getPreferredBlockSize();
@@ -320,9 +319,8 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 
 	partitionHint = "Linux";
 
-
-	// Clip the size of the new partition if it extends past the
-	// end-of-media.
+	/* Clip the size of the new partition if it extends past the
+	 * end-of-media. */
 
 	if(partitionBase + partitionSize > media->getSize()) {
 		LogError("Warning: Specified partition extends past end of "
@@ -333,7 +331,7 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 		partitionSize = media->getSize() - partitionBase;
 	}
 
-	// Create the new media object.
+	/* Create the new media object. */
 
 	newMedia = new IOMedia;
 	if(newMedia) {
@@ -346,7 +344,7 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 			/* isWritable         */ partitionIsWritable,
 			/* contentHint        */ partitionHint))
 		{
-			// Set a name for this partition.
+			/* Set a name for this partition. */
 
 			char name[24];
 			snprintf(name, sizeof(name), "Untitled %d",
@@ -354,15 +352,15 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 			newMedia->setName(partitionName[0] ? partitionName :
 				name);
 
-			// Set a location value (the partition number) for this
-			// partition.
+			/* Set a location value (the partition number) for this
+			 * partition. */
 
 			char location[12];
 			snprintf(location, sizeof(location), "%d",
 				(int) partitionNumber);
 			newMedia->setLocation(location);
 
-			// Set the "Partition ID" key for this partition.
+			/* Set the "Partition ID" key for this partition. */
 
 			newMedia->setProperty(kIOMediaPartitionIDKey,
 				(UInt32) partitionNumber, 32);
@@ -379,18 +377,14 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 #ifndef __LP64__
 bool IOLVMPartitionScheme::attachMediaObjectToDeviceTree(IOMedia *media)
 {
-	//
-	// Attach the given media object to the device tree plane.
-	//
+	/* Attach the given media object to the device tree plane. */
 
 	return super::attachMediaObjectToDeviceTree(media);
 }
 
 void IOLVMPartitionScheme::detachMediaObjectFromDeviceTree(IOMedia *media)
 {
-	//
-	// Detach the given media object from the device tree plane.
-	//
+	/* Detach the given media object from the device tree plane. */
 
 	super::detachMediaObjectFromDeviceTree(media);
 }

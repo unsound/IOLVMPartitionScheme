@@ -43,70 +43,80 @@ protected:
 	struct ExpansionData { /* */ };
 	ExpansionData *_expansionData;
 
-	OSSet *_partitions; /* (set of media objects representing partitions) */
+	/** Set of media objects representing partitions. */
+	OSSet *_partitions;
 
-	/*
+	/**
 	 * Free all of this object's outstanding resources.
+	 *
+	 * Overrides: IOPartitionScheme::free(void)
 	 */
-
 	virtual void free(void);
 
-	/*
-	 * Scan the provider media for an LVM layout.  Returns the set of media
-	 * objects representing each of the partitions (the retain for the set
-	 * is passed to the caller), or null should no LVM layout be found.  The
-	 * default probe score can be adjusted up or down, based on the
-	 * confidence of the scan.
+	/**
+	 * Scan the provider media for an LVM layout. Returns the set of media
+	 * objects representing each of those volumes that reside on the
+	 * physical volume represented by the media, and that are laid out
+	 * continously (one extent) on the volume. If no LVM layout is found, or
+	 * the LVM layout contains unsupported features, then NULL is returned.
 	 */
-
 	virtual OSSet* scan(SInt32 *score);
 
 #ifndef __LP64__
-	/*
+	/**
 	 * Attach the given media object to the device tree plane.
+	 *
+	 * Overrides: IOPartitionScheme::attachMediaObjectToDeviceTree(IOMedia*,
+	 *            IOOptionBits)
 	 */
-
 	virtual bool attachMediaObjectToDeviceTree(IOMedia *media)
 		__attribute__ ((deprecated));
 
-	/*
+	/**
 	 * Detach the given media object from the device tree plane.
+	 *
+	 * Overrides: IOPartitionScheme::detachMediaObjectFromDeviceTree(
+	 *            IOMedia*, IOOptionBits)
 	 */
-
 	virtual void detachMediaObjectFromDeviceTree(IOMedia *media)
 		__attribute__ ((deprecated));
 #endif /* !__LP64__ */
 
 public:
 
-	/*
+	/**
 	 * Initialize this object's minimal state.
+	 *
+	 * Overrides: IOPartitionScheme::init(OSDictionary*)
 	 */
-
 	virtual bool init(OSDictionary *properties = 0);
 
-	/*
+	/**
 	 * Determine whether the provider media contains an LVM layout.
+	 *
+	 * Overrides: IOService::probe(IOService*, SInt32*)
 	 */
-
 	virtual IOService* probe(IOService *provider, SInt32 *score);
 
-	/*
+	/**
 	 * Publish the new media objects which represent our partitions.
+	 *
+	 * Overrides: IOService::start(IOService*)
 	 */
-
 	virtual bool start(IOService *provider);
 
-	/*
+	/**
 	 * Clean up after the media objects we published before terminating.
+	 *
+	 * Overrides: IOService::stop(IOService*)
 	 */
-
 	virtual void stop(IOService *provider);
 
-	/*
+	/**
 	 * Request that the provider media be re-scanned for partitions.
+	 *
+	 * Overrides: IOService::requestProbe(IOOptionBits)
 	 */
-
 	virtual IOReturn requestProbe(IOOptionBits options);
 
 	OSMetaClassDeclareReservedUnused(IOLVMPartitionScheme,  0);
