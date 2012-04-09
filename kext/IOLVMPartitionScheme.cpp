@@ -317,6 +317,14 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 		partitionName ? partitionName : "<null>", ARGllu(partitionBase),
 		ARGllu(partitionSize));
 
+	/* We use "Linux" as partition hint as this will surely work best given
+	 * that an LVM volume containing a file system will most likely always
+	 * contain a Linux file system. We do not know however if there is a
+	 * file system on the LVM volume (it could be for instance swap space or
+	 * raw space reserved for database storage). So one could argue that no
+	 * partition hint at all would be more appropriate, but at this stage I
+	 * think "Linux" is more helpful. */
+
 	partitionHint = "Linux";
 
 	/* Clip the size of the new partition if it extends past the
