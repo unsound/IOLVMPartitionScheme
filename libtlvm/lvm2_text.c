@@ -2029,7 +2029,7 @@ static int lvm2_logical_volume_create(
 
 			lvm2_free((void**) &segments,
 				segments_len * sizeof(struct lvm2_segment*));
-	}
+		}
 		if(id)
 			lvm2_bounded_string_destroy(&id);
 	}
