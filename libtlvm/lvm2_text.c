@@ -2497,7 +2497,7 @@ static int lvm2_volume_group_create(
 			}
 			else {
 				LogError("Unrecognized value-type member in "
-					"volume group: '%.*s'",
+					"lvm2_volume_group: '%.*s'",
 					name->length, name->content);
 				err = EINVAL;
 				break;
@@ -2595,7 +2595,7 @@ static int lvm2_volume_group_create(
 			}
 			else {
 				LogError("Unrecognized array-type member in "
-					"volume group: '%.*s'",
+					"lvm2_volume_group: '%.*s'",
 					name->length, name->content);
 				err = EINVAL;
 				break;
@@ -2717,7 +2717,7 @@ static int lvm2_volume_group_create(
 			}
 			else {
 				LogError("Unrecognized section-type member in "
-					"volume group: '%.*s'",
+					"lvm2_volume_group: '%.*s'",
 					name->length, name->content);
 				err = EINVAL;
 				break;
