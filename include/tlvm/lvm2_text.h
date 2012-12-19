@@ -136,6 +136,7 @@ typedef enum {
 struct lvm2_volume_group {
 	struct lvm2_bounded_string *id;
 	u64 seqno;
+	struct lvm2_bounded_string *format;		/**< Optional. */
 	lvm2_volume_group_status status;
 	lvm2_volume_group_flags flags;
 	u64 extent_size;

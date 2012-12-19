@@ -2419,6 +2419,8 @@ static int lvm2_volume_group_create(
 	lvm2_bool seqno_defined = LVM2_FALSE;
 	u64 seqno = 0;
 
+	struct lvm2_bounded_string *format = NULL;
+
 	lvm2_bool status_defined = LVM2_FALSE;
 	lvm2_volume_group_status status = 0;
 
@@ -2481,6 +2483,31 @@ static int lvm2_volume_group_create(
 					break;
 
 				seqno_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "format", name->length))
+			{
+				if(format) {
+					LogError("Duplicate definition of "
+						"'format'.");
+					err = EINVAL;
+					break;
+				}
+				else if(value->value->length != 4 ||
+					memcmp(value->value->content, "lvm2",
+					4))
+				{
+					LogError("Unrecognized value for key "
+						"'format': '%.*s'",
+						value->value->length,
+						value->value->content);
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&format);
+				if(err)
+					break;
 			}
 			else if(!strncmp(name->content, "extent_size",
 				name->length))
@@ -2836,6 +2863,7 @@ static int lvm2_volume_group_create(
 	if(!err) {
 		vg->id = id;
 		vg->seqno = seqno;
+		vg->format = format;
 		vg->status = status;
 		vg->flags = flags;
 		vg->extent_size = extent_size;
@@ -2878,6 +2906,11 @@ static int lvm2_volume_group_create(
 				physical_volumes_len *
 				sizeof(struct lvm2_physical_volume*));
 		}
+
+		if(format) {
+			lvm2_bounded_string_destroy(&format);
+		}
+
 		if(id)
 			lvm2_bounded_string_destroy(&id);
 	}
@@ -2912,6 +2945,10 @@ static void lvm2_volume_group_destroy(struct lvm2_volume_group **vg)
 		lvm2_free((void**) &(*vg)->physical_volumes,
 			(*vg)->physical_volumes_len *
 			sizeof(struct lvm2_physical_volume*));
+	}
+
+	if((*vg)->format) {
+		lvm2_bounded_string_destroy(&(*vg)->format);
 	}
 
 	lvm2_bounded_string_destroy(&(*vg)->id);
