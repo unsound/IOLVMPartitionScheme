@@ -3122,8 +3122,8 @@ LVM2_EXPORT int lvm2_read_text(struct lvm2_device *dev,
 	char *text;
 	size_t text_len;
 
-	struct lvm2_dom_section *parse_result;
-	struct lvm2_layout *layout;
+	struct lvm2_dom_section *parse_result = NULL;
+	struct lvm2_layout *layout = NULL;
 
 	LogDebug("%s: Entering with dev=%p metadata_offset = %" FMTllu " "
 		"metadata_size = %" FMTllu " locn=%p out_layout=%p...",
