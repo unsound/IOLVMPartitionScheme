@@ -1735,6 +1735,10 @@ static int lvm2_logical_volume_create(
 	lvm2_bool flags_defined = LVM2_FALSE;
 	lvm2_logical_volume_flags flags = 0;
 
+	struct lvm2_bounded_string *creation_host = NULL;
+
+	struct lvm2_bounded_string *creation_time = NULL;
+
 	lvm2_bool segment_count_defined = LVM2_FALSE;
 	u64 segment_count = 0;
 
@@ -1761,6 +1765,36 @@ static int lvm2_logical_volume_create(
 
 				err = lvm2_bounded_string_dup(value->value,
 					&id);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "creation_host",
+				name->length))
+			{
+				if(creation_host) {
+					LogError("Duplicate definition of "
+						"'creation_host'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&creation_host);
+				if(err)
+					break;
+			}
+			else if(!strncmp(name->content, "creation_time",
+				name->length))
+			{
+				if(creation_time) {
+					LogError("Duplicate definition of "
+						"'creation_time'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&creation_time);
 				if(err)
 					break;
 			}
@@ -2006,6 +2040,8 @@ static int lvm2_logical_volume_create(
 		lv->id = id;
 		lv->status = status;
 		lv->flags = flags;
+		lv->creation_host = creation_host;
+		lv->creation_time = creation_time;
 		lv->segment_count = segment_count;
 		lv->segments_len = segments_len;
 		lv->segments = segments;
@@ -2030,6 +2066,15 @@ static int lvm2_logical_volume_create(
 			lvm2_free((void**) &segments,
 				segments_len * sizeof(struct lvm2_segment*));
 		}
+
+		if(creation_time) {
+			lvm2_bounded_string_destroy(&creation_time);
+		}
+
+		if(creation_host) {
+			lvm2_bounded_string_destroy(&creation_host);
+		}
+
 		if(id)
 			lvm2_bounded_string_destroy(&id);
 	}
@@ -2050,6 +2095,14 @@ static void lvm2_logical_volume_destroy(struct lvm2_logical_volume **lv)
 
 		lvm2_free((void**) &(*lv)->segments,
 			(*lv)->segments_len * sizeof(struct lvm2_segment*));
+	}
+
+	if((*lv)->creation_time) {
+		lvm2_bounded_string_destroy(&(*lv)->creation_time);
+	}
+
+	if((*lv)->creation_host) {
+		lvm2_bounded_string_destroy(&(*lv)->creation_host);
 	}
 
 	lvm2_bounded_string_destroy(&(*lv)->id);
