@@ -204,7 +204,8 @@ __private_extern__ int lvm2_device_read(struct lvm2_device *const dev,
 		__FUNCTION__, dev, ARGllu(in_pos), ARGzu(in_count), in_buf);
 
 	if(in_count > SSIZE_MAX) {
-		LogDebug("%s: 'in_count' overflows. Leaving with %d.", __FUNCTION__, ERANGE);
+		LogDebug("%s: 'in_count' overflows. Leaving with %d.",
+			__FUNCTION__, ERANGE);
 		return ERANGE;
 	}
 
@@ -214,7 +215,8 @@ __private_extern__ int lvm2_device_read(struct lvm2_device *const dev,
 
 	LogDebug("lead_in=%" FMTllu, ARGllu(lead_in));
 	LogDebug("lead_out=%" FMTllu, ARGllu(lead_out));
-	LogDebug("in_buf->buffer->getLength()=%" FMTllu, ARGllu(in_buf->buffer->getLength()));
+	LogDebug("in_buf->buffer->getLength()=%" FMTllu,
+		ARGllu(in_buf->buffer->getLength()));
 
 	if(lead_in != 0 || lead_out != 0 ||
 		in_count != in_buf->buffer->getLength())

@@ -403,7 +403,8 @@ static int lvm2_dom_section_add_child(struct lvm2_dom_section *const section,
 			"expansion: %d", err);
 	}
 	else {
-		LogDebug("\tAllocated %" FMTzu " bytes.", ARGzu(new_children_size));
+		LogDebug("\tAllocated %" FMTzu " bytes.",
+			ARGzu(new_children_size));
 		if(old_children)
 			memcpy(new_children, old_children, old_children_size);
 		new_children[new_children_len - 1] = child;
@@ -2911,7 +2912,8 @@ LVM2_EXPORT int lvm2_layout_create(
 				if(err)
 					break;
 			}
-			else if(!strncmp(name->content, "version", name->length))
+			else if(!strncmp(name->content, "version",
+				name->length))
 			{
 				if(version_defined) {
 					LogError("Duplicate definition of "

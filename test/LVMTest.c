@@ -32,7 +32,11 @@
 /* Defined in lvm2_osal_unix.c. */
 long long lvm2_get_allocations(void);
 
-#define emit(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while(0)
+#define emit(...) \
+	do { \
+		fprintf(stderr, __VA_ARGS__); \
+		fprintf(stderr, "\n"); \
+	} while(0)
 
 static void print_lvm2_stripe(struct lvm2_stripe *stripe)
 {
@@ -194,7 +198,8 @@ static int read_text_main(const char *const device_name)
 							result, &layout)))
 						{
 							lvm2_dom_section_destroy(
-								&result, LVM2_TRUE);
+								&result,
+								LVM2_TRUE);
 
 							fprintf(stderr, "lvm2_"
 								"layout_create "
@@ -209,7 +214,8 @@ static int read_text_main(const char *const device_name)
 						}
 						else {
 							lvm2_dom_section_destroy(
-								&result, LVM2_TRUE);
+								&result,
+								LVM2_TRUE);
 
 							fprintf(stderr, "lvm2_"
 								"layout_create "
