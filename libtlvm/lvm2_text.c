@@ -3515,9 +3515,9 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 #endif /* defined(DEBUG) */
 
 		deviceSize = le64_to_cpu(pvHeader->device_size_xl);
-		disk_areas_idx = 0;
-		while(!manual_break &&
-			pvHeader->disk_areas_xl[disk_areas_idx].offset != 0)
+		for(disk_areas_idx = 0; !manual_break &&
+			pvHeader->disk_areas_xl[disk_areas_idx].offset != 0;
+			++disk_areas_idx)
 		{
 			const struct disk_locn *locn;
 			const struct disk_locn *meta_locn;
@@ -3794,8 +3794,6 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 
 				lvm2_layout_destroy(&layout);
 			}
-
-			++disk_areas_idx;
 		}
 	}
 
