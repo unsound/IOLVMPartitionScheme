@@ -171,9 +171,6 @@ static int lvm2_unix_get_block_size(int fd, u32 *out_block_size)
 	if(res) {
 		err = errno ? errno : EIO;
 	}
-	else if(sector_size > U32_MAX) {
-		err = ERANGE;
-	}
 	else {
 		*out_block_size = (u32) sector_size;
 		err = 0;
