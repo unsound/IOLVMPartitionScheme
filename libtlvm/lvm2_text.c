@@ -1,5 +1,5 @@
 /*-
- * Copyright (C) 2012 Erik Larsson
+ * Copyright (C) 2012-2014 Erik Larsson
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
