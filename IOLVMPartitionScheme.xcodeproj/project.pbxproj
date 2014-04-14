@@ -378,7 +378,7 @@
 				MODULE_NAME = org.catacombae.iokit.IOLVMPartitionScheme;
 				MODULE_START = IOLVMPartitionScheme_start;
 				MODULE_STOP = IOLVMPartitionScheme_stop;
-				MODULE_VERSION = 2014.4.14;
+				MODULE_VERSION = 2014.4.14f1;
 				PRODUCT_NAME = IOLVMPartitionScheme;
 				"SDKROOT[arch=x86_64]" = macosx10.6;
 				WRAPPER_EXTENSION = kext;
@@ -456,7 +456,7 @@
 				MODULE_NAME = org.catacombae.iokit.IOLVMPartitionScheme;
 				MODULE_START = IOLVMPartitionScheme_start;
 				MODULE_STOP = IOLVMPartitionScheme_stop;
-				MODULE_VERSION = 2014.4.14;
+				MODULE_VERSION = 2014.4.14f1;
 				PRODUCT_NAME = IOLVMPartitionScheme;
 				"SDKROOT[arch=x86_64]" = macosx10.6;
 				WRAPPER_EXTENSION = kext;
@@ -576,7 +576,7 @@
 				MODULE_NAME = org.catacombae.iokit.IOLVMPartitionScheme;
 				MODULE_START = IOLVMPartitionScheme_start;
 				MODULE_STOP = IOLVMPartitionScheme_stop;
-				MODULE_VERSION = 2014.4.14;
+				MODULE_VERSION = 2014.4.14f1;
 				PRODUCT_NAME = IOLVMPartitionScheme;
 				WRAPPER_EXTENSION = kext;
 			};
@@ -595,7 +595,7 @@
 				MODULE_NAME = org.catacombae.iokit.IOLVMPartitionScheme;
 				MODULE_START = IOLVMPartitionScheme_start;
 				MODULE_STOP = IOLVMPartitionScheme_stop;
-				MODULE_VERSION = 2014.4.14;
+				MODULE_VERSION = 2014.4.14f1;
 				PRODUCT_NAME = IOLVMPartitionScheme;
 				WRAPPER_EXTENSION = kext;
 			};
