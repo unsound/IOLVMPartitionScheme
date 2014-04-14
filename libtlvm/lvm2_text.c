@@ -103,7 +103,8 @@ static void lvm2_bounded_string_destroy(
 		struct lvm2_bounded_string **string)
 {
 	lvm2_free((void**) string,
-		sizeof(struct lvm2_bounded_string) + (*string)->length);
+		sizeof(struct lvm2_bounded_string) +
+		(((*string)->length + 1) * sizeof(char)));
 }
 
 static int lvm2_dom_obj_initialize(const lvm2_dom_type type,
