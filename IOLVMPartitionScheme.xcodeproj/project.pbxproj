@@ -675,7 +675,7 @@
 				03735EB4152D59D30074BEE6 /* Release_64 */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Release_64;
 		};
 		0373F74B1519B54600713D63 /* Build configuration list for PBXNativeTarget "LVMTest" */ = {
 			isa = XCConfigurationList;
@@ -686,7 +686,7 @@
 				03272467151CE356004C9F99 /* Release_64 */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Release_64;
 		};
 		1DEB91D908733DB10010E9CD /* Build configuration list for PBXNativeTarget "IOLVMPartitionScheme" */ = {
 			isa = XCConfigurationList;
@@ -697,7 +697,7 @@
 				03272466151CE356004C9F99 /* Release_64 */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Release_64;
 		};
 		1DEB91DD08733DB10010E9CD /* Build configuration list for PBXProject "IOLVMPartitionScheme" */ = {
 			isa = XCConfigurationList;
@@ -708,7 +708,7 @@
 				03272465151CE356004C9F99 /* Release_64 */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Release_64;
 		};
 /* End XCConfigurationList section */
 	};
