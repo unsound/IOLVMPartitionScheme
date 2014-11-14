@@ -67,7 +67,9 @@ static void print_lvm2_logical_volume(struct lvm2_logical_volume *lv)
 	emit("\t\tname: %s", lv->name->content);
 	emit("\t\tid: %s", lv->id->content);
 	emit("\t\tstatus: 0x%X", lv->status);
-	emit("\t\tflags: 0x%X", lv->flags);
+	if(lv->flags_defined) {
+		emit("\t\tflags: 0x%X", lv->flags);
+	}
 	emit("\t\tsegment_count: %" FMTllu, ARGllu(lv->segment_count));
 
 	if(lv->segments_len) {

@@ -2012,17 +2012,15 @@ static int lvm2_logical_volume_create(
 		if(!lv_name_dup ||
 			!id ||
 			!status_defined ||
-			!flags_defined ||
 			!segment_count_defined ||
 			!segments_len ||
 			!segments)
 		{
 			LogError("Missing members in lvm2_logical_volume:%s%s%s"
-				"%s%s%s%s",
+				"%s%s%s",
 				!lv_name_dup ? " lv_name_dup" : "",
 				!id ? " id" : "",
 				!status_defined ? " status" : "",
-				!flags_defined ? " flags" : "",
 				!segment_count_defined ? " segment_count" : "",
 				!segments_len ? " segments_len" : "",
 				!segments ? " segments" : "");
@@ -2054,7 +2052,13 @@ static int lvm2_logical_volume_create(
 		lv->name = lv_name_dup;
 		lv->id = id;
 		lv->status = status;
-		lv->flags = flags;
+		lv->flags_defined = flags_defined;
+		if(flags_defined) {
+			lv->flags = flags;
+		}
+		else {
+			lv->flags = 0;
+		}
 		lv->creation_host = creation_host;
 		lv->creation_time = creation_time;
 		lv->segment_count = segment_count;
