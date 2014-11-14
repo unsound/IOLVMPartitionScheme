@@ -1649,7 +1649,13 @@ static int lvm2_segment_create(
 			!stripes_len ||
 			!stripes)
 		{
-			LogError("Missing members in lvm2_segment.");
+			LogError("Missing members in lvm2_segment:%s%s%s%s%s%s",
+				!start_extent_defined ? " start_extent" : "",
+				!extent_count_defined ? " extent_count" : "",
+				!type ? " type" : "",
+				!stripe_count_defined ? " stripe_count" : "",
+				!stripes_len ? " stripes_len" : "",
+				!stripes ? " stripes" : "");
 			err = EINVAL;
 		}
 	}
@@ -2011,7 +2017,15 @@ static int lvm2_logical_volume_create(
 			!segments_len ||
 			!segments)
 		{
-			LogError("Missing members in lvm2_logical_volume.");
+			LogError("Missing members in lvm2_logical_volume:%s%s%s"
+				"%s%s%s%s",
+				!lv_name_dup ? " lv_name_dup" : "",
+				!id ? " id" : "",
+				!status_defined ? " status" : "",
+				!flags_defined ? " flags" : "",
+				!segment_count_defined ? " segment_count" : "",
+				!segments_len ? " segments_len" : "",
+				!segments ? " segments" : "");
 			err = EINVAL;
 		}
 	}
@@ -2354,7 +2368,16 @@ static int lvm2_physical_volume_create(
 			!pe_start_defined ||
 			!pe_count_defined)
 		{
-			LogError("Missing members in lvm2_physical_volume.");
+			LogError("Missing members in lvm2_physical_volume:%s%s"
+				"%s%s%s%s%s%s",
+				!pv_name_dup ? " pv_name_dup" : "",
+				!id ? " id" : "",
+				!device ? " device" : "",
+				!status_defined ? " status" : "",
+				!flags_defined ? " flags" : "",
+				!dev_size_defined ? " dev_size" : "",
+				!pe_start_defined ? " pe_start" : "",
+				!pe_count_defined ? " pe_count" : "");
 			err = EINVAL;
 		}
 	}
@@ -3130,7 +3153,15 @@ LVM2_EXPORT int lvm2_layout_create(
 			!creation_host ||
 			!creation_time_defined)
 		{
-			LogError("Missing members in lvm2_layout.");
+			LogError("Missing members in lvm2_layout:%s%s%s%s%s%s"
+				"%s",
+				!vg_name ? " vg_name" : "",
+				!vg ? " vg" : "",
+				!contents ? " contents" : "",
+				!version_defined ? " version" : "",
+				!description ? " description" : "",
+				!creation_host ? " creation_host" : "",
+				!creation_time_defined ? " creation_time" : "");
 			err = EINVAL;
 		}
 	}
