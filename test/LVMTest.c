@@ -87,8 +87,12 @@ static void print_lvm2_physical_volume(struct lvm2_physical_volume *pv)
 	emit("\t\tid: %s", pv->id->content);
 	emit("\t\tdevice: %s", pv->device->content);
 	emit("\t\tstatus: 0x%X", pv->status);
-	emit("\t\tflags: 0x%X", pv->flags);
-	emit("\t\tdev_size: %" FMTllu, ARGllu(pv->dev_size));
+	if(pv->flags_defined) {
+		emit("\t\tflags: 0x%X", pv->flags);
+	}
+	if(pv->dev_size_defined) {
+		emit("\t\tdev_size: %" FMTllu, ARGllu(pv->dev_size));
+	}
 	emit("\t\tpe_start: %" FMTllu, ARGllu(pv->pe_start));
 	emit("\t\tpe_count: %" FMTllu, ARGllu(pv->pe_count));
 }

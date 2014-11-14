@@ -116,7 +116,9 @@ struct lvm2_physical_volume {
 	struct lvm2_bounded_string *id;
 	struct lvm2_bounded_string *device;
 	lvm2_physical_volume_status status;
+	lvm2_bool flags_defined;
 	lvm2_physical_volume_flags flags;
+	lvm2_bool dev_size_defined;
 	u64 dev_size;
 	u64 pe_start;
 	u64 pe_count;
@@ -191,7 +193,8 @@ int lvm2_read_text(struct lvm2_device *dev, u64 metadata_offset,
 int lvm2_parse_device(struct lvm2_device *dev,
 		lvm2_bool (*volume_callback)(void *private_data,
 			u64 device_size, const char *volume_name,
-			u64 volume_start, u64 volume_length),
+			u64 volume_start, u64 volume_length,
+			lvm2_bool is_incomplete),
 		void *private_data);
 
 lvm2_bool lvm2_check_layout(void);

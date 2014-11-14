@@ -2363,19 +2363,15 @@ static int lvm2_physical_volume_create(
 			!id ||
 			!device ||
 			!status_defined ||
-			!flags_defined ||
-			!dev_size_defined ||
 			!pe_start_defined ||
 			!pe_count_defined)
 		{
 			LogError("Missing members in lvm2_physical_volume:%s%s"
-				"%s%s%s%s%s%s",
+				"%s%s%s%s",
 				!pv_name_dup ? " pv_name_dup" : "",
 				!id ? " id" : "",
 				!device ? " device" : "",
 				!status_defined ? " status" : "",
-				!flags_defined ? " flags" : "",
-				!dev_size_defined ? " dev_size" : "",
 				!pe_start_defined ? " pe_start" : "",
 				!pe_count_defined ? " pe_count" : "");
 			err = EINVAL;
@@ -2399,8 +2395,23 @@ static int lvm2_physical_volume_create(
 		pv->id = id;
 		pv->device = device;
 		pv->status = status;
-		pv->flags = flags;
-		pv->dev_size = dev_size;
+
+		pv->flags_defined = flags_defined;
+		if(flags_defined) {
+			pv->flags = flags;
+		}
+		else {
+			pv->flags = 0;
+		}
+
+		pv->dev_size_defined = dev_size_defined;
+		if(dev_size_defined) {
+			pv->dev_size = dev_size;
+		}
+		else {
+			pv->dev_size = 0;
+		}
+
 		pv->pe_start = pe_start;
 		pv->pe_count = pe_count;
 
