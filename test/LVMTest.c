@@ -105,7 +105,9 @@ static void print_lvm2_volume_group(struct lvm2_volume_group *vg)
 	emit("\tid: %s", vg->id ? vg->id->content : "NULL");
 	emit("\tseqno: %" FMTllu, ARGllu(vg->seqno));
 	emit("\tstatus: 0x%" FMTllX, ARGllX(vg->status));
-	emit("\tflags: 0x%" FMTllX, ARGllX(vg->flags));
+	if(vg->flags_defined) {
+		emit("\tflags: 0x%" FMTllX, ARGllX(vg->flags));
+	}
 	emit("\textent_size: %" FMTllu, ARGllu(vg->extent_size));
 	emit("\tmax_lv: %" FMTllu, ARGllu(vg->max_lv));
 	emit("\tmax_pv: %" FMTllu, ARGllu(vg->max_pv));

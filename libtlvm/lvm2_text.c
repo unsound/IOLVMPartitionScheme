@@ -2865,11 +2865,6 @@ static int lvm2_volume_group_create(
 				"lvm2_volume_group.");
 			err = EINVAL;
 		}
-		if(!flags_defined) {
-			LogError("Missing member 'flags' in "
-				"lvm2_volume_group.");
-			err = EINVAL;
-		}
 		if(!extent_size_defined) {
 			LogError("Missing member 'extent_size' in "
 				"lvm2_volume_group.");
@@ -2904,7 +2899,12 @@ static int lvm2_volume_group_create(
 		vg->seqno = seqno;
 		vg->format = format;
 		vg->status = status;
-		vg->flags = flags;
+		if(vg->flags_defined) {
+			vg->flags = flags;
+		}
+		else {
+			vg->flags = 0;
+		}
 		vg->extent_size = extent_size;
 		vg->max_lv = max_lv;
 		vg->max_pv = max_pv;

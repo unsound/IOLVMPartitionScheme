@@ -141,6 +141,7 @@ struct lvm2_volume_group {
 	u64 seqno;
 	struct lvm2_bounded_string *format;		/**< Optional. */
 	lvm2_volume_group_status status;
+	lvm2_bool flags_defined;
 	lvm2_volume_group_flags flags;
 	u64 extent_size;
 	u64 max_lv;
