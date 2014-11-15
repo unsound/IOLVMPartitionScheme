@@ -2505,7 +2505,8 @@ static int lvm2_physical_volume_create(
 					if(!strncmp("ALLOCATABLE", value,
 						value_len))
 					{
-						status |= LVM2_PHYSICAL_VOLUME_STATUS_ALLOCATABLE;
+						status |=
+							LVM2_PHYSICAL_VOLUME_STATUS_ALLOCATABLE;
 					}
 					else {
 						LogError("Unrecognized value "
@@ -2891,17 +2892,20 @@ static int lvm2_volume_group_create(
 					if(!strncmp("RESIZEABLE", value,
 						value_len))
 					{
-						status |= LVM2_VOLUME_GROUP_STATUS_RESIZEABLE;
+						status |=
+							LVM2_VOLUME_GROUP_STATUS_RESIZEABLE;
 					}
 					else if(!strncmp("READ", value,
 						value_len))
 					{
-						status |= LVM2_VOLUME_GROUP_STATUS_READ;
+						status |=
+							LVM2_VOLUME_GROUP_STATUS_READ;
 					}
 					else if(!strncmp("WRITE", value,
 						value_len))
 					{
-						status |= LVM2_VOLUME_GROUP_STATUS_WRITE;
+						status |=
+							LVM2_VOLUME_GROUP_STATUS_WRITE;
 					}
 					else {
 						LogError("Unrecognized value "
@@ -3760,7 +3764,8 @@ static lvm2_bool lvm2_parse_device_find_pv_location(
 LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 		lvm2_bool (*const volume_callback)(void *private_data,
 			u64 device_size, const char *volume_name,
-			u64 volume_start, u64 volume_length, lvm2_bool is_incomplete),
+			u64 volume_start, u64 volume_length,
+			lvm2_bool is_incomplete),
 		void *const private_data)
 {
 	const u64 media_block_size = lvm2_device_get_alignment(dev);
