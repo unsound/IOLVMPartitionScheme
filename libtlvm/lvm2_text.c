@@ -1698,10 +1698,10 @@ static int lvm2_segment_create(
 				for(j = 0; j < new_location_array_len; ++j) {
 					const struct lvm2_dom_value
 						*const pv_name_obj =
-						array->elements[j];
+						array->elements[j * 2];
 					const struct lvm2_dom_value
 						*const extent_start_obj =
-						array->elements[j+1];
+						array->elements[(j * 2) + 1];
 
 					const struct lvm2_bounded_string
 						*const pv_name =
