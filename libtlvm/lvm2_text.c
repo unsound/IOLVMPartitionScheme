@@ -1228,8 +1228,9 @@ static int lvm2_parse_u64_value(const char *const string_value,
 		u64 cur_value;
 
 		if(cur_char < '0' || cur_char > '9') {
-			LogError("Invalid character in numeric string: '%c'",
-				cur_char);
+			LogError("Invalid character in numeric string: '%c' "
+				"(string: \"%.*s\")",
+				cur_char, string_value_len, string_value);
 			return EINVAL;
 		}
 		/*LogDebug("\t[%d] cur_char='%c'", i, cur_char);*/
