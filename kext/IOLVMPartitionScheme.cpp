@@ -32,7 +32,8 @@
 
 static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *obj,
 	int partitionNumber, UInt64 formattedLVMSize, const char *partitionName,
-	UInt64 partitionBase, UInt64 partitionSize);
+	UInt64 partitionBase, UInt64 partitionSize, bool partitionIsWritable,
+	const char *partitionHint);
 
 #define super IOPartitionScheme
 OSDefineMetaClassAndStructors(IOLVMPartitionScheme, IOPartitionScheme);
@@ -205,11 +206,15 @@ struct LVMDeviceReadContext {
 
 static lvm2_bool volumeCallback(void *const privateData, const u64 deviceSize,
 		const char *const volumeName, const u64 volumeStart,
-		const u64 volumeLength)
+		const u64 volumeLength, const lvm2_bool isIncomplete)
 {
 	struct LVMDeviceReadContext *const ctx =
 		(struct LVMDeviceReadContext*) privateData;
+	IOMedia *const media = ctx->obj->getProvider();
 	IOMedia *newMedia;
+
+	const char *partitionHint;
+	bool partitionIsWritable;
 
 	LogDebug("%s: Entering with privateData=%p deviceSize=%" FMTllu " "
 		"volumeName=%s volumeStart=%" FMTllu " "
@@ -217,10 +222,30 @@ static lvm2_bool volumeCallback(void *const privateData, const u64 deviceSize,
 		__FUNCTION__, privateData, ARGllu(deviceSize), volumeName,
 		ARGllu(volumeStart), ARGllu(volumeLength));
 
+	if(!isIncomplete) {
+		/* We use "Linux" as partition hint as this will surely work
+		 * best given that an LVM volume containing a file system will
+		 * most likely always contain a Linux file system. We do not
+		 * know however if there is a file system on the LVM volume (it
+		 * could be for instance swap space or raw space reserved for
+		 * database storage). So one could argue that no partition hint
+		 * at all would be more appropriate, but at this stage I think
+		 * "Linux" is more helpful. */
+		partitionIsWritable = media->isWritable();
+		partitionHint = "Linux";
+	}
+	else {
+		/* For incomplete volumes, we expose the raw PVs as read-only
+		 * devices (for recovery purposes). */
+		partitionIsWritable = false;
+		partitionHint = "LVM_incomplete_logical_volume";
+	}
+
 	/* TODO: Check that partition is inside device bounds, doesn't overlap
 	 * other partitions, ... */
 	newMedia = instantiateMediaObject(ctx->obj, ctx->partitionNumber++,
-		deviceSize, volumeName, volumeStart, volumeLength);
+		deviceSize, volumeName, volumeStart, volumeLength,
+		partitionIsWritable, partitionHint);
 	if(newMedia) {
 		LogDebug("Instantiated media object.");
 		ctx->partitions->setObject(newMedia);
@@ -301,13 +326,13 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 		const UInt64 formattedLVMSize __attribute__((unused)),
 		const char *const partitionName,
 		const UInt64 partitionBase,
-		UInt64 partitionSize)
+		UInt64 partitionSize,
+		const bool partitionIsWritable,
+		const char *const partitionHint)
 {
 	IOMedia *const media = obj->getProvider();
-	const bool partitionIsWritable = media->isWritable();
 	const UInt64 mediaBlockSize = media->getPreferredBlockSize();
 
-	const char *partitionHint;
 	IOMedia *newMedia;
 
 	LogDebug("Entering with obj=%p partitionNumber=%d "
@@ -316,16 +341,6 @@ static IOMedia* instantiateMediaObject(IOLVMPartitionScheme *const obj,
 		obj, partitionNumber, ARGllu(formattedLVMSize), partitionName,
 		partitionName ? partitionName : "<null>", ARGllu(partitionBase),
 		ARGllu(partitionSize));
-
-	/* We use "Linux" as partition hint as this will surely work best given
-	 * that an LVM volume containing a file system will most likely always
-	 * contain a Linux file system. We do not know however if there is a
-	 * file system on the LVM volume (it could be for instance swap space or
-	 * raw space reserved for database storage). So one could argue that no
-	 * partition hint at all would be more appropriate, but at this stage I
-	 * think "Linux" is more helpful. */
-
-	partitionHint = "Linux";
 
 	/* Clip the size of the new partition if it extends past the
 	 * end-of-media. */

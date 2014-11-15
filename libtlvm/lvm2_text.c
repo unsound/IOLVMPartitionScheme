@@ -3369,7 +3369,7 @@ err_out:
 LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 		lvm2_bool (*const volume_callback)(void *private_data,
 			u64 device_size, const char *volume_name,
-			u64 volume_start, u64 volume_length),
+			u64 volume_start, u64 volume_length, lvm2_bool is_incomplete),
 		void *const private_data)
 {
 	const u64 media_block_size = lvm2_device_get_alignment(dev);
@@ -3868,45 +3868,83 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 					const struct lvm2_logical_volume *const
 						lv =
 						layout->vg->logical_volumes[j];
-					const struct lvm2_bounded_string
-						*pv_name;
 					u64 partitionStart;
 					u64 partitionLength;
+					lvm2_bool is_incomplete = LVM2_FALSE;
+					u64 seg_no;
+					u64 stripe_no;
 
 					if(lv->segment_count != 1) {
 						LogError("More than one "
-							"segment is "
-							"unsupported.");
-						continue;
+							"segment in volume. "
+							"Marking as "
+							"incomplete.");
+						is_incomplete = LVM2_TRUE;
 					}
-
-					if(lv->segments[0]->stripes_len != 1) {
+					else if(lv->segments[0]->stripes_len != 1) {
 						LogError("More than one stripe "
-							"is unsupported.");
-						continue;
+							"in volume. Marking as "
+							"incomplete.");
+						is_incomplete = LVM2_TRUE;
 					}
 
-					pv_name = lv->segments[0]->stripes[0]->
-						pv_name;
-
-					if(pv_name->length !=
-						match->name->length ||
-						strncmp(pv_name->content,
-						match->name->content,
-						pv_name->length) != 0)
+					/* Search for our PV among the LV's
+					 * segments and stripes. */
+					for(seg_no = 0;
+						seg_no < lv->segment_count;
+						++seg_no)
 					{
-						LogError("Physical volume name "
-							"mismatch: \"%.*s\" != "
-							"\"%.*s\"",
-							pv_name->length,
-							pv_name->content,
+						for(stripe_no = 0;
+							stripe_no < lv->
+							segments[seg_no]->
+							stripes_len;
+							++stripe_no)
+						{
+							const struct
+							lvm2_bounded_string
+								*pv_name;
+
+							pv_name = lv->segments
+								[seg_no]->
+								stripes
+								[stripe_no]->
+								pv_name;
+							if(pv_name->length ==
+								match->name->
+								length &&
+								!strncmp(
+								pv_name->
+								content,
+								match->name->
+								content,
+								pv_name->
+								length))
+							{
+								break;
+							}
+						}
+
+						if(stripe_no != lv->
+							segments[seg_no]->
+							stripes_len)
+						{
+							break;
+						}
+					}
+
+					if(seg_no == lv->segment_count) {
+						LogError("Physical volume "
+							"\"%.*s\" not found in "
+							"logical volume's "
+							"descriptors.",
 							match->name->length,
 							match->name->content);
 						continue;
 					}
 
 					partitionStart = (match->pe_start +
-						lv->segments[0]->stripes[0]->
+						lv->segments[seg_no]->
+						stripes[stripe_no]->
 						extent_start *
 						layout->vg->extent_size) *
 						media_block_size /* 512? */;
@@ -3914,7 +3952,8 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 						ARGllu(partitionStart));
 
 					partitionLength =
-						lv->segments[0]->extent_count *
+						lv->segments[seg_no]->
+						extent_count *
 						layout->vg->extent_size *
 						media_block_size /* 512? */;
 
@@ -3924,7 +3963,8 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 					if(!volume_callback(private_data,
 						deviceSize, lv->name->content,
 						partitionStart,
-						partitionLength))
+						partitionLength,
+						is_incomplete))
 					{
 						manual_break = LVM2_TRUE;
 						break;

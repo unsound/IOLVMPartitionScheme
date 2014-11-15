@@ -256,7 +256,8 @@ static int read_text_main(const char *const device_name)
 static lvm2_bool volume_callback(
 		void *const private_data __attribute__((unused)),
 		const u64 device_size, const char *const volume_name,
-		const u64 volume_start, const u64 volume_length)
+		const u64 volume_start, const u64 volume_length,
+		const lvm2_bool is_incomplete)
 {
 	static lvm2_bool device_size_printed = LVM2_FALSE;
 
@@ -265,9 +266,10 @@ static lvm2_bool volume_callback(
 			ARGllu(device_size));
 	}
 
-	fprintf(stdout, "%s: [%" FMTllu "-%" FMTllu "]\n",
+	fprintf(stdout, "%s: [%" FMTllu "-%" FMTllu "]%s\n",
 		volume_name, ARGllu(volume_start),
-		ARGllu(volume_start + volume_length));
+		ARGllu(volume_start + volume_length),
+		is_incomplete ? " (incomplete)" : "");
 
 	return LVM2_TRUE;
 }
