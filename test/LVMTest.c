@@ -38,7 +38,7 @@ long long lvm2_get_allocations(void);
 		fprintf(stderr, "\n"); \
 	} while(0)
 
-static void print_lvm2_stripe(struct lvm2_stripe *stripe)
+static void print_lvm2_pv_location(struct lvm2_pv_location *stripe)
 {
 	emit("\t\t\t\tpv_name: %s", stripe->pv_name->content);
 	emit("\t\t\t\textent_start: %" FMTllu, ARGllu(stripe->extent_start));
@@ -49,15 +49,45 @@ static void print_lvm2_segment(struct lvm2_segment *segment)
 	emit("\t\t\tstart_extent: %" FMTllu, ARGllu(segment->start_extent));
 	emit("\t\t\textent_count: %" FMTllu, ARGllu(segment->extent_count));
 	emit("\t\t\ttype: %s", segment->type->content);
-	emit("\t\t\tstripe_count: %" FMTllu, ARGllu(segment->stripe_count));
 
-	if(segment->stripes_len) {
+	if(segment->stripe_count_defined) {
+		emit("\t\t\tstripe_count: %" FMTllu,
+			ARGllu(segment->stripe_count));
+	}
+	if(segment->stripe_size_defined) {
+		emit("\t\t\tstripe_size: %" FMTllu,
+			ARGllu(segment->stripe_size));
+	}
+	if(segment->stripes) {
 		size_t i;
 
 		for(i = 0; i < segment->stripes_len; ++i) {
 			emit("\t\t\tstripes[%" FMTzu "]:",
 				ARGzu(i));
-			print_lvm2_stripe(segment->stripes[i]);
+			print_lvm2_pv_location(segment->stripes[i]);
+		}
+	}
+
+	if(segment->mirror_count_defined) {
+		emit("\t\t\tmirror_count: %" FMTllu,
+			ARGllu(segment->mirror_count));
+	}
+	if(segment->mirror_log) {
+		emit("\t\t\t: %.*s",
+			segment->mirror_log->length,
+			segment->mirror_log->content);
+	}
+	if(segment->region_size_defined) {
+		emit("\t\t\tregion_size: %" FMTllu,
+			ARGllu(segment->region_size));
+	}
+	if(segment->mirrors) {
+		size_t i;
+
+		for(i = 0; i < segment->mirrors_len; ++i) {
+			emit("\t\t\tmirrors[%" FMTzu "]:",
+				ARGzu(i));
+			print_lvm2_pv_location(segment->mirrors[i]);
 		}
 	}
 }

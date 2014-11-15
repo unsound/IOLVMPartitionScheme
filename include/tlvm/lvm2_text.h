@@ -65,7 +65,7 @@ struct lvm2_dom_array {
 	size_t elements_len;
 };
 
-struct lvm2_stripe {
+struct lvm2_pv_location {
 	struct lvm2_bounded_string *pv_name;
 	u64 extent_start;
 };
@@ -74,9 +74,24 @@ struct lvm2_segment {
 	u64 start_extent;
 	u64 extent_count;
 	struct lvm2_bounded_string *type;
+
+	/* Variables only existing in striped or plain (stripe_count=1)
+	 * volumes. */
+	lvm2_bool stripe_count_defined;
 	u64 stripe_count;
+	lvm2_bool stripe_size_defined;
+	u64 stripe_size;
 	size_t stripes_len;
-	struct lvm2_stripe **stripes;
+	struct lvm2_pv_location **stripes;
+
+	/* Variables only existing in mirrored volumes. */
+	lvm2_bool mirror_count_defined;
+	u64 mirror_count;
+	struct lvm2_bounded_string *mirror_log;
+	lvm2_bool region_size_defined;
+	u64 region_size;
+	size_t mirrors_len;
+	struct lvm2_pv_location **mirrors;
 };
 
 typedef enum {

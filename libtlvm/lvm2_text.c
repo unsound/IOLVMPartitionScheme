@@ -1378,17 +1378,19 @@ static int lvm2_dom_tree_lookup_u64(
 }
 #endif
 
-static int lvm2_stripe_create(const struct lvm2_bounded_string *const pv_name,
-		const u64 extent_start, struct lvm2_stripe **const out_stripe)
+static int lvm2_pv_location_create(
+		const struct lvm2_bounded_string *const pv_name,
+		const u64 extent_start,
+		struct lvm2_pv_location **const out_stripe)
 {
 	int err;
-	struct lvm2_stripe *stripe = NULL;
+	struct lvm2_pv_location *stripe = NULL;
 	struct lvm2_bounded_string *dup_pv_name = NULL;
 
-	err = lvm2_malloc(sizeof(struct lvm2_stripe), (void**) &stripe);
+	err = lvm2_malloc(sizeof(struct lvm2_pv_location), (void**) &stripe);
 	if(err) {
 		LogError("Error while allocating memory for struct "
-			"lvm2_stripe: %d", err);
+			"lvm2_pv_location: %d", err);
 	}
 	else if((err = lvm2_bounded_string_dup(pv_name, &dup_pv_name)) != 0) {
 		LogError("Error while duplicating bounded string: %d", err);
@@ -1398,7 +1400,8 @@ static int lvm2_stripe_create(const struct lvm2_bounded_string *const pv_name,
 		if(dup_pv_name)
 			lvm2_bounded_string_destroy(&dup_pv_name);
 		if(stripe)
-			lvm2_free((void**) &stripe, sizeof(struct lvm2_stripe));
+			lvm2_free((void**) &stripe,
+				sizeof(struct lvm2_pv_location));
 	}
 	else {
 		stripe->pv_name = dup_pv_name;
@@ -1410,11 +1413,11 @@ static int lvm2_stripe_create(const struct lvm2_bounded_string *const pv_name,
 	return err;
 }
 
-static void lvm2_stripe_destroy(struct lvm2_stripe **const stripe)
+static void lvm2_pv_location_destroy(struct lvm2_pv_location **const stripe)
 {
 	lvm2_bounded_string_destroy(&(*stripe)->pv_name);
 
-	lvm2_free((void**) stripe, sizeof(struct lvm2_stripe));
+	lvm2_free((void**) stripe, sizeof(struct lvm2_pv_location));
 }
 
 static int lvm2_segment_create(
@@ -1433,11 +1436,30 @@ static int lvm2_segment_create(
 
 	struct lvm2_bounded_string *type = NULL;
 
+	/* Variables only existing in striped or plain (stripe_count = 1)
+	 * volumes. */
+
 	lvm2_bool stripe_count_defined = LVM2_FALSE;
 	u64 stripe_count = 0;
 
+	lvm2_bool stripe_size_defined = LVM2_FALSE;
+	u64 stripe_size = 0;
+
 	size_t stripes_len = 0;
-	struct lvm2_stripe **stripes = NULL;
+	struct lvm2_pv_location **stripes = NULL;
+
+	/* Variables only existing in mirrored volumes. */
+
+	lvm2_bool mirror_count_defined = LVM2_FALSE;
+	u64 mirror_count = 0;
+
+	struct lvm2_bounded_string *mirror_log = NULL;
+
+	lvm2_bool region_size_defined = LVM2_FALSE;
+	u64 region_size = 0;
+
+	size_t mirrors_len = 0;
+	struct lvm2_pv_location **mirrors = NULL;
 
 	for(i = 0; i < segment_section->children_len; ++i) {
 		const struct lvm2_dom_obj *const cur_obj =
@@ -1512,6 +1534,82 @@ static int lvm2_segment_create(
 
 				stripe_count_defined = LVM2_TRUE;
 			}
+			else if(!strncmp(name->content, "stripe_size",
+				name->length))
+			{
+				if(stripe_size_defined) {
+					LogError("Duplicate definition of "
+						"'stripe_size'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&stripe_size);
+				if(err) {
+					LogError("Error while parsing value of "
+						"'stripe_size' as u64'.");
+					break;
+				}
+
+				stripe_size_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "mirror_count",
+				name->length))
+			{
+				if(mirror_count_defined) {
+					LogError("Duplicate definition of "
+						"'mirror_count'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&mirror_count);
+				if(err) {
+					LogError("Error while parsing value of "
+						"'mirror_count' as u64'.");
+					break;
+				}
+
+				mirror_count_defined = LVM2_TRUE;
+			}
+			else if(!strncmp(name->content, "mirror_log",
+				name->length))
+			{
+				if(mirror_log) {
+					LogError("Duplicate definition of "
+						"'mirror_log'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&mirror_log);
+				if(err) {
+					break;
+				}
+			}
+			else if(!strncmp(name->content, "region_size",
+				name->length))
+			{
+				if(region_size_defined) {
+					LogError("Duplicate definition of "
+						"'region_size'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_layout_parse_u64_value(value,
+					&region_size);
+				if(err) {
+					LogError("Error while parsing value of "
+						"'region_size' as u64'.");
+					break;
+				}
+
+				region_size_defined = LVM2_TRUE;
+			}
 			else {
 				LogError("Unrecognized value-type member in "
 					"lvm2_segment: '%.*s'",
@@ -1524,43 +1622,70 @@ static int lvm2_segment_create(
 			struct lvm2_dom_array *const array =
 				(struct lvm2_dom_array*) cur_obj;
 
-			if(!strncmp(name->content, "stripes", name->length))
-			{
-				size_t j;
-				struct lvm2_stripe **new_stripes = NULL;
-				size_t new_stripes_len;
+			struct lvm2_pv_location ***location_array_ptr = NULL;
+			size_t *location_array_length_ptr = NULL;
+			const char *location_array_name = "";
 
-				if(stripes) {
+			if(!strncmp(name->content, "stripes", name->length)) {
+				location_array_ptr = &stripes;
+				location_array_length_ptr = &stripes_len;
+				location_array_name = "stripes";
+			}
+			else if(!strncmp(name->content, "mirrors",
+				name->length))
+			{
+				location_array_ptr = &mirrors;
+				location_array_length_ptr = &mirrors_len;
+				location_array_name = "mirrors";
+			}
+			else {
+				LogError("Unrecognized array-type member in "
+					 "lvm2_segment: '%.*s'",
+					 name->length, name->content);
+				err = EINVAL;
+				break;
+			}
+
+			if(location_array_ptr && location_array_length_ptr) {
+				size_t j;
+				struct lvm2_pv_location **new_location_array =
+					NULL;
+				size_t new_location_array_len;
+
+				if(*location_array_ptr) {
 					LogError("Duplicate definition of "
-						"'stripes'.");
+						"'%s'.", location_array_name);
 					err = EINVAL;
 					break;
 				}
 
 				if(array->elements_len % 2 != 0) {
-					LogError("Uneven 'stripes' array "
-						"length: %" FMTzu,
+					LogError("Uneven '%s' array length: "
+						"%" FMTzu,
+						location_array_name,
 						ARGzu(array->elements_len));
 					err = EINVAL;
 					break;
 				}
 
-				new_stripes_len = array->elements_len / 2;
+				new_location_array_len =
+					array->elements_len / 2;
 
-				err = lvm2_malloc(new_stripes_len *
-					sizeof(struct lvm2_stripe*),
-					(void**) &new_stripes);
+				err = lvm2_malloc(new_location_array_len *
+					sizeof(struct lvm2_pv_location*),
+					(void**) &new_location_array);
 				if(err) {
 					LogError("Error while allocating "
-						"memory for 'new_stripes' "
-						"array.");
+						"memory for "
+						"'new_location_array' array.");
 					break;
 				}
 
-				memset(new_stripes, 0, new_stripes_len *
-					sizeof(struct lvm2_stripe*));
+				memset(new_location_array, 0,
+					new_location_array_len *
+					sizeof(struct lvm2_pv_location*));
 
-				for(j = 0; j < new_stripes_len; ++j) {
+				for(j = 0; j < new_location_array_len; ++j) {
 					const struct lvm2_dom_value
 						*const pv_name_obj =
 						array->elements[j];
@@ -1573,7 +1698,8 @@ static int lvm2_segment_create(
 						pv_name_obj->value;
 					u64 extent_start = 0;
 
-					struct lvm2_stripe *stripe = NULL;
+					struct lvm2_pv_location *location =
+						NULL;
 
 					err = lvm2_layout_parse_u64_value(
 						extent_start_obj,
@@ -1584,42 +1710,40 @@ static int lvm2_segment_create(
 						break;
 					}
 
-					err = lvm2_stripe_create(pv_name,
-						extent_start, &stripe);
+					err = lvm2_pv_location_create(pv_name,
+						extent_start, &location);
 					if(err) {
 						LogError("Error while creating "
-							"'lvm2_stripe': %d",
-							err);
+							"'lvm2_pv_location': "
+							"%d", err);
 						break;
 					}
 
-					new_stripes[j] = stripe;
+					new_location_array[j] = location;
 				}
 
 				if(err) {
-					for(j = 0; j < new_stripes_len; ++j) {
-						if(new_stripes[j]) {
-							lvm2_stripe_destroy(
-								&new_stripes[j]
+					for(j = 0; j < new_location_array_len;
+						++j)
+					{
+						if(new_location_array[j]) {
+							lvm2_pv_location_destroy(
+								&new_location_array[j]
 							);
 						}
 					}
 
-					lvm2_free((void**) &new_stripes,
-						new_stripes_len *
-						sizeof(struct lvm2_stripe*));
+					lvm2_free((void**) &new_location_array,
+						new_location_array_len *
+						sizeof(struct
+						lvm2_pv_location*));
 				}
 				else {
-					stripes = new_stripes;
-					stripes_len = new_stripes_len;
+					*location_array_ptr =
+						new_location_array;
+					*location_array_length_ptr =
+						new_location_array_len;
 				}
-			}
-			else {
-				LogError("Unrecognized array-type member in "
-					"lvm2_segment: '%.*s'",
-					name->length, name->content);
-				err = EINVAL;
-				break;
 			}
 		}
 		else if(cur_obj->type == LVM2_DOM_TYPE_SECTION) {
@@ -1644,18 +1768,12 @@ static int lvm2_segment_create(
 	if(!err) {
 		if(!start_extent_defined ||
 			!extent_count_defined ||
-			!type ||
-			!stripe_count_defined ||
-			!stripes_len ||
-			!stripes)
+			!type)
 		{
-			LogError("Missing members in lvm2_segment:%s%s%s%s%s%s",
+			LogError("Missing members in lvm2_segment:%s%s%s",
 				!start_extent_defined ? " start_extent" : "",
 				!extent_count_defined ? " extent_count" : "",
-				!type ? " type" : "",
-				!stripe_count_defined ? " stripe_count" : "",
-				!stripes_len ? " stripes_len" : "",
-				!stripes ? " stripes" : "");
+				!type ? " type" : "");
 			err = EINVAL;
 		}
 	}
@@ -1674,11 +1792,30 @@ static int lvm2_segment_create(
 
 	if(!err) {
 		segment->start_extent = start_extent;
+
 		segment->extent_count = extent_count;
+
 		segment->type = type;
-		segment->stripe_count = stripe_count;
-		segment->stripes_len = stripes_len;
+
+		segment->stripe_count_defined = stripe_count_defined;
+		segment->stripe_count = stripe_count_defined ? stripe_count : 0;
+
+		segment->stripe_size_defined = stripe_size_defined;
+		segment->stripe_size = stripe_size_defined ? stripe_size : 0;
+
+		segment->stripes_len = stripes ? stripes_len : 0;
 		segment->stripes = stripes;
+
+		segment->mirror_count_defined = mirror_count_defined;
+		segment->mirror_count = mirror_count_defined ? mirror_count : 0;
+
+		segment->mirror_log = mirror_log;
+
+		segment->region_size_defined = region_size_defined;
+		segment->region_size = region_size_defined ? region_size : 0;
+
+		segment->mirrors_len = mirrors ? mirrors_len : 0;
+		segment->mirrors = mirrors;
 
 		*out_segment = segment;
 	}
@@ -1686,16 +1823,33 @@ static int lvm2_segment_create(
 		if(segment)
 			lvm2_free((void**) &segment,
 				sizeof(struct lvm2_segment));
+
+		if(mirrors) {
+			size_t j;
+
+			for(j = 0; j < mirrors_len; ++j) {
+				lvm2_pv_location_destroy(&mirrors[j]);
+			}
+
+			mirrors_len = 0;
+			lvm2_free((void**) &mirrors,
+				mirrors_len * sizeof(struct lvm2_pv_location*));
+		}
+
+		if(mirror_log) {
+			lvm2_bounded_string_destroy(&mirror_log);
+		}
+
 		if(stripes) {
 			size_t j;
 
 			for(j = 0; j < stripes_len; ++j) {
-				lvm2_stripe_destroy(&stripes[j]);
+				lvm2_pv_location_destroy(&stripes[j]);
 			}
 
 			stripes_len = 0;
 			lvm2_free((void**) &stripes,
-				stripes_len * sizeof(struct lvm2_stripe*));
+				stripes_len * sizeof(struct lvm2_pv_location*));
 		}
 		if(type)
 			lvm2_bounded_string_destroy(&type);
@@ -1708,17 +1862,35 @@ static void lvm2_segment_destroy(struct lvm2_segment **const segment)
 {
 	size_t i;
 
-	lvm2_bounded_string_destroy(&(*segment)->type);
+	if((*segment)->mirrors) {
+		size_t j;
 
+		for(j = 0; j < (*segment)->mirrors_len; ++j) {
+			lvm2_pv_location_destroy(&(*segment)->mirrors[j]);
+		}
 
-	for(i = 0; i < (*segment)->stripes_len; ++i) {
-		lvm2_stripe_destroy(&(*segment)->stripes[i]);
+		lvm2_free((void**) &(*segment)->mirrors,
+			(*segment)->mirrors_len *
+			sizeof(struct lvm2_pv_location*));
+		(*segment)->mirrors_len = 0;
 	}
 
-	(*segment)->stripes_len = 0;
-	lvm2_free((void**) &(*segment)->stripes,
-		(*segment)->stripes_len * sizeof(struct lvm2_stripe*));
-	
+	if((*segment)->mirror_log) {
+		lvm2_bounded_string_destroy(&(*segment)->mirror_log);
+	}
+
+	if((*segment)->stripes) {
+		for(i = 0; i < (*segment)->stripes_len; ++i) {
+			lvm2_pv_location_destroy(&(*segment)->stripes[i]);
+		}
+
+		lvm2_free((void**) &(*segment)->stripes,
+			  (*segment)->stripes_len *
+			  sizeof(struct lvm2_pv_location*));
+		(*segment)->stripes_len = 0;
+	}
+
+	lvm2_bounded_string_destroy(&(*segment)->type);
 
 	lvm2_free((void**) segment, sizeof(struct lvm2_segment));
 }
@@ -3393,6 +3565,146 @@ err_out:
 	goto cleanup;
 }
 
+static lvm2_bool lvm2_parse_device_find_pv_location(
+		const struct lvm2_logical_volume *const lv,
+		const struct lvm2_physical_volume *const pv,
+		struct lvm2_segment **const out_segment,
+		struct lvm2_pv_location **const out_location,
+		lvm2_bool *const out_lv_is_incomplete)
+{
+	u64 seg_no;
+	u64 stripe_no;
+	u64 mirror_no;
+
+	for(seg_no = 0; seg_no < lv->segment_count; ++seg_no) {
+		if(lv->segments[seg_no]->stripes &&
+			lv->segments[seg_no]->mirrors)
+		{
+			LogError("Segment %" FMTzu " of logical volume "
+				"\"%.*s\" has both stripes and mirrors "
+				"(corrupt LVM metadata or new LVM feature?). "
+				"Marking as incomplete.",
+				ARGzu(seg_no),
+				lv->name->length,
+				lv->name->content);
+
+			*out_lv_is_incomplete = LVM2_TRUE;
+		}
+
+		if(lv->segments[seg_no]->stripes) {
+			LogDebug("Matching with %" FMTzu " stripes...",
+				ARGzu(lv->segments[seg_no]->stripes_len));
+
+			if(lv->segments[seg_no]->stripes_len != 1) {
+				LogError("More than one stripe in segment "
+					"%" FMTzu " of logical volume "
+					"\"%.*s\". Marking as incomplete.",
+					ARGzu(seg_no),
+					lv->name->length,
+					lv->name->content);
+
+				*out_lv_is_incomplete = LVM2_TRUE;
+			}
+
+			for(stripe_no = 0;
+				stripe_no < lv->segments[seg_no]->stripes_len;
+				++stripe_no)
+			{
+				const struct lvm2_bounded_string *pv_name;
+
+				pv_name = lv->segments[seg_no]->
+					stripes[stripe_no]->pv_name;
+
+				LogDebug("\tMatching with stripe \"%.*s\"...",
+					pv_name->length,
+					pv_name->content);
+
+				if(pv_name->length == pv->name->length &&
+					!strncmp(pv_name->content,
+					pv->name->content, pv_name->length))
+				{
+					/* Match found. Break inner loop. */
+					break;
+				}
+			}
+
+			/* Break outer loop if a match was found among the
+			 * stripes. */
+			if(stripe_no < lv->segments[seg_no]->stripes_len) {
+				break;
+			}
+		}
+
+		if(lv->segments[seg_no]->mirrors) {
+			LogDebug("Matching with %" FMTzu " mirrors...",
+				ARGzu(lv->segments[seg_no]->mirrors_len));
+
+			if(lv->segments[seg_no]->mirrors_len > 1) {
+				LogError("More than one mirror in segment "
+					"%" FMTzu " of logical volume "
+					"\"%.*s\". Marking as incomplete.",
+					ARGzu(seg_no),
+					lv->name->length,
+					lv->name->content);
+
+				*out_lv_is_incomplete = LVM2_TRUE;
+			}
+
+			for(mirror_no = 0;
+				mirror_no < lv->segments[seg_no]->mirrors_len;
+				++mirror_no)
+			{
+				const struct lvm2_bounded_string *pv_name;
+
+				pv_name = lv->segments[seg_no]->
+					mirrors[mirror_no]->pv_name;
+
+				LogDebug("\tMatching with mirror \"%.*s\"...",
+					pv_name->length,
+					pv_name->content);
+
+				if(pv_name->length == pv->name->length &&
+					!strncmp(pv_name->content,
+					pv->name->content, pv_name->length))
+				{
+					/* Match found. Break inner loop. */
+					break;
+				}
+			}
+
+			/* Break outer loop if a match was found among the
+			 * mirrors. */
+			if(mirror_no < lv->segments[seg_no]->mirrors_len) {
+				break;
+			}
+		}
+	}
+
+	if(seg_no == lv->segment_count) {
+		/* No match. */
+		return LVM2_FALSE;
+	}
+	else if(stripe_no < lv->segments[seg_no]->stripes_len) {
+		/* Match found in stripes. */
+		*out_segment = lv->segments[seg_no];
+		*out_location = lv->segments[seg_no]->stripes[stripe_no];
+		return LVM2_TRUE;
+	}
+	else if(mirror_no < lv->segments[seg_no]->mirrors_len) {
+		/* Match found in mirrors. */
+		*out_segment = lv->segments[seg_no];
+		*out_location = lv->segments[seg_no]->mirrors[mirror_no];
+		return LVM2_TRUE;
+	}
+	else {
+		LogError("Unexpected: both stripe_no (%" FMTzu ") and "
+			"mirror_no (%" FMTzu ") have reached the end.",
+			ARGzu(stripe_no),
+			ARGzu(mirror_no));
+		return LVM2_FALSE;
+	}
+}
+
 LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 		lvm2_bool (*const volume_callback)(void *private_data,
 			u64 device_size, const char *volume_name,
@@ -3898,8 +4210,10 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 					u64 partitionStart;
 					u64 partitionLength;
 					lvm2_bool is_incomplete = LVM2_FALSE;
-					u64 seg_no;
-					u64 stripe_no;
+					struct lvm2_segment *segment_match =
+						NULL;
+					struct lvm2_pv_location *pv_match =
+						NULL;
 
 					if(lv->segment_count != 1) {
 						LogError("More than one "
@@ -3908,58 +4222,13 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 							"incomplete.");
 						is_incomplete = LVM2_TRUE;
 					}
-					else if(lv->segments[0]->stripes_len != 1) {
-						LogError("More than one stripe "
-							"in volume. Marking as "
-							"incomplete.");
-						is_incomplete = LVM2_TRUE;
-					}
 
 					/* Search for our PV among the LV's
 					 * segments and stripes. */
-					for(seg_no = 0;
-						seg_no < lv->segment_count;
-						++seg_no)
+					if(!lvm2_parse_device_find_pv_location(
+						lv, match, &segment_match,
+						&pv_match, &is_incomplete))
 					{
-						for(stripe_no = 0;
-							stripe_no < lv->
-							segments[seg_no]->
-							stripes_len;
-							++stripe_no)
-						{
-							const struct
-							lvm2_bounded_string
-								*pv_name;
-
-							pv_name = lv->segments
-								[seg_no]->
-								stripes
-								[stripe_no]->
-								pv_name;
-							if(pv_name->length ==
-								match->name->
-								length &&
-								!strncmp(
-								pv_name->
-								content,
-								match->name->
-								content,
-								pv_name->
-								length))
-							{
-								break;
-							}
-						}
-
-						if(stripe_no != lv->
-							segments[seg_no]->
-							stripes_len)
-						{
-							break;
-						}
-					}
-
-					if(seg_no == lv->segment_count) {
 						LogError("Physical volume "
 							"\"%.*s\" not found in "
 							"logical volume's "
@@ -3970,17 +4239,14 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 					}
 
 					partitionStart = (match->pe_start +
-						lv->segments[seg_no]->
-						stripes[stripe_no]->
-						extent_start *
+						pv_match->extent_start *
 						layout->vg->extent_size) *
 						media_block_size /* 512? */;
 					LogDebug("partitionStart: %" FMTllu,
 						ARGllu(partitionStart));
 
 					partitionLength =
-						lv->segments[seg_no]->
-						extent_count *
+						segment_match->extent_count *
 						layout->vg->extent_size *
 						media_block_size /* 512? */;
 
