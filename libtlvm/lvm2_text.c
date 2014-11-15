@@ -1483,8 +1483,11 @@ static int lvm2_segment_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&start_extent);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'start_extent' as u64.");
 					break;
+				}
 
 				start_extent_defined = LVM2_TRUE;
 			}
@@ -1500,8 +1503,11 @@ static int lvm2_segment_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&extent_count);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'extent_count' as u64'.");
 					break;
+				}
 
 				extent_count_defined = LVM2_TRUE;
 			}
@@ -1530,8 +1536,11 @@ static int lvm2_segment_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&stripe_count);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'stripe_count' as u64'.");
 					break;
+				}
 
 				stripe_count_defined = LVM2_TRUE;
 			}
@@ -2008,8 +2017,11 @@ static int lvm2_logical_volume_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&segment_count);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'segment_count' as u64'.");
 					break;
+				}
 
 				segment_count_defined = LVM2_TRUE;
 			}
@@ -2378,8 +2390,11 @@ static int lvm2_physical_volume_create(
 
 				err = lvm2_bounded_string_dup(value->value,
 					&id);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'id' as u64'.");
 					break;
+				}
 			}
 			else if(!strncmp(name->content, "device", name->length))
 			{
@@ -2392,8 +2407,11 @@ static int lvm2_physical_volume_create(
 
 				err = lvm2_bounded_string_dup(value->value,
 					&device);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'device' as u64'.");
 					break;
+				}
 			}
 			else if(!strncmp(name->content, "dev_size",
 				name->length))
@@ -2407,8 +2425,11 @@ static int lvm2_physical_volume_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&dev_size);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'dev_size' as u64'.");
 					break;
+				}
 
 				dev_size_defined = LVM2_TRUE;
 			}
@@ -2424,8 +2445,11 @@ static int lvm2_physical_volume_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&pe_start);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'pe_start' as u64'.");
 					break;
+				}
 
 				pe_start_defined = LVM2_TRUE;
 			}
@@ -2441,8 +2465,11 @@ static int lvm2_physical_volume_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&pe_count);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'pe_count' as u64'.");
 					break;
+				}
 
 				pe_count_defined = LVM2_TRUE;
 			}
@@ -2704,8 +2731,11 @@ static int lvm2_volume_group_create(
 
 				err = lvm2_bounded_string_dup(value->value,
 					&id);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'id' as u64'.");
 					break;
+				}
 			}
 			else if(!strncmp(name->content, "seqno", name->length))
 			{
@@ -2718,8 +2748,11 @@ static int lvm2_volume_group_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&seqno);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'seqno' as u64'.");
 					break;
+				}
 
 				seqno_defined = LVM2_TRUE;
 			}
@@ -2760,8 +2793,11 @@ static int lvm2_volume_group_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&extent_size);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'extent_size' as u64'.");
 					break;
+				}
 
 				extent_size_defined = LVM2_TRUE;
 			}
@@ -2776,8 +2812,11 @@ static int lvm2_volume_group_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&max_lv);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'max_lv' as u64'.");
 					break;
+				}
 
 				max_lv_defined = LVM2_TRUE;
 			}
@@ -2792,8 +2831,11 @@ static int lvm2_volume_group_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&max_pv);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'mav_pv' as u64'.");
 					break;
+				}
 
 				max_pv_defined = LVM2_TRUE;
 			}
@@ -2809,8 +2851,11 @@ static int lvm2_volume_group_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&metadata_copies);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'metadata_copies' as u64'.");
 					break;
+				}
 
 				metadata_copies_defined = LVM2_TRUE;
 			}
@@ -3253,8 +3298,11 @@ LVM2_EXPORT int lvm2_layout_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&version);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'version' as u64'.");
 					break;
+				}
 
 				version_defined = LVM2_TRUE;
 			}
@@ -3300,8 +3348,11 @@ LVM2_EXPORT int lvm2_layout_create(
 
 				err = lvm2_layout_parse_u64_value(value,
 					&creation_time);
-				if(err)
+				if(err) {
+					LogError("Error while parsing value of "
+						"'creation_time' as u64'.");
 					break;
+				}
 
 				creation_time_defined = LVM2_TRUE;
 			}
