@@ -4269,9 +4269,13 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 
 					if(lv->segment_count != 1) {
 						LogError("More than one "
-							"segment in volume. "
+							"segment in logical "
+							"volume \"%.*s\". "
 							"Marking as "
-							"incomplete.");
+							"incomplete.",
+							lv->name->length,
+							lv->name->content);
+
 						is_incomplete = LVM2_TRUE;
 					}
 
@@ -4284,9 +4288,13 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 						LogError("Physical volume "
 							"\"%.*s\" not found in "
 							"logical volume's "
-							"descriptors.",
+							"descriptors. Skipping "
+							"logical volume "
+							"\"%.*s\"...",
 							match->name->length,
-							match->name->content);
+							match->name->content,
+							lv->name->length,
+							lv->name->content);
 						continue;
 					}
 
