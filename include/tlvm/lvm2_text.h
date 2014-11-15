@@ -98,6 +98,7 @@ struct lvm2_logical_volume {
 	lvm2_logical_volume_flags flags;
 	struct lvm2_bounded_string *creation_host;	/**< Optional. */
 	struct lvm2_bounded_string *creation_time;	/**< Optional. */
+	struct lvm2_bounded_string *allocation_policy;	/**< Optional. */
 	u64 segment_count;
 	size_t segments_len;
 	struct lvm2_segment **segments;

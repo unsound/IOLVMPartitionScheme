@@ -1746,6 +1746,8 @@ static int lvm2_logical_volume_create(
 
 	struct lvm2_bounded_string *creation_time = NULL;
 
+	struct lvm2_bounded_string *allocation_policy = NULL;
+
 	lvm2_bool segment_count_defined = LVM2_FALSE;
 	u64 segment_count = 0;
 
@@ -1804,6 +1806,22 @@ static int lvm2_logical_volume_create(
 					&creation_time);
 				if(err)
 					break;
+			}
+			else if(!strncmp(name->content, "allocation_policy",
+				name->length))
+			{
+				if(allocation_policy) {
+					LogError("Duplicate definition of "
+						"'allocation_policy'.");
+					err = EINVAL;
+					break;
+				}
+
+				err = lvm2_bounded_string_dup(value->value,
+					&allocation_policy);
+				if(err) {
+					break;
+				}
 			}
 			else if(!strncmp(name->content, "segment_count",
 				name->length))
@@ -2061,6 +2079,7 @@ static int lvm2_logical_volume_create(
 		}
 		lv->creation_host = creation_host;
 		lv->creation_time = creation_time;
+		lv->allocation_policy = allocation_policy;
 		lv->segment_count = segment_count;
 		lv->segments_len = segments_len;
 		lv->segments = segments;
@@ -2084,6 +2103,10 @@ static int lvm2_logical_volume_create(
 
 			lvm2_free((void**) &segments,
 				segments_len * sizeof(struct lvm2_segment*));
+		}
+
+		if(allocation_policy) {
+			lvm2_bounded_string_destroy(&allocation_policy);
 		}
 
 		if(creation_time) {
@@ -2114,6 +2137,10 @@ static void lvm2_logical_volume_destroy(struct lvm2_logical_volume **lv)
 
 		lvm2_free((void**) &(*lv)->segments,
 			(*lv)->segments_len * sizeof(struct lvm2_segment*));
+	}
+
+	if((*lv)->allocation_policy) {
+		lvm2_bounded_string_destroy(&(*lv)->allocation_policy);
 	}
 
 	if((*lv)->creation_time) {
