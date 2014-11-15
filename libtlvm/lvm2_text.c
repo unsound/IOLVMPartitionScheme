@@ -4286,6 +4286,11 @@ LVM2_EXPORT int lvm2_parse_device(struct lvm2_device *const dev,
 
 					/* Search for our PV among the LV's
 					 * segments and stripes. */
+					LogDebug("Searching for physical "
+						"volume \"%.*s\" in logical "
+						"volume's descriptors...",
+						match->name->length,
+						match->name->content);
 					if(!lvm2_parse_device_find_pv_location(
 						lv, match, &segment_match,
 						&pv_match, &is_incomplete))
